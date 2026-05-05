@@ -2501,10 +2501,18 @@ const GD_DATA_FILE='ev_data.json';
 const GD_HTML_FILE='עלות_חשמל_רכב.html';
 
 let gdToken=null;
-let gdDataFileId=LS.get('ev4_gd_data_fid',null);
-let gdHtmlFileId=LS.get('ev4_gd_html_fid',null);
+let gdUserId=null;
+let gdDataFileId=null;
+let gdHtmlFileId=null;
 let gdSyncing=false;
 let gdAutoSaveTimer=null;
+
+function gdUserKey(k){return gdUserId?`ev4_${gdUserId}_${k}`:null;}
+function gdLoadUserIds(){
+  if(!gdUserId)return;
+  gdDataFileId=LS.get(gdUserKey('gd_data_fid'),null);
+  gdHtmlFileId=LS.get(gdUserKey('gd_html_fid'),null);
+}
 
 function gdShowBar(){
   const bar=$('gdBar');
@@ -2532,11 +2540,19 @@ function gdLogin(){
   if(!window.google){toast('⚠️ Google לא נטען, נסה שוב','e');return;}
   const client=google.accounts.oauth2.initTokenClient({
     client_id:GD_CLIENT_ID,
-    scope:GD_SCOPE,
-    callback:(resp)=>{
+    scope:GD_SCOPE+' https://www.googleapis.com/auth/userinfo.profile',
+    callback:async(resp)=>{
       if(resp.error){gdSetStatus('❌ שגיאת התחברות','var(--er)');return;}
       gdToken=resp.access_token;
       LS.set('ev4_gd_token',gdToken);
+      // קבל userId
+      try{
+        const r=await fetch('https://www.googleapis.com/oauth2/v2/userinfo',{headers:{'Authorization':'Bearer '+gdToken}});
+        const u=await r.json();
+        gdUserId=u.id;
+        LS.set('ev4_gd_uid',gdUserId);
+      }catch{}
+      gdLoadUserIds();
       gdSetStatus('✅ מחובר','var(--ac)');
       gdSetBtn('התנתק',gdLogout,'var(--er)');
       gdSync();
@@ -2546,7 +2562,8 @@ function gdLogin(){
 }
 
 function gdLogout(){
-  gdToken=null;LS.set('ev4_gd_token',null);
+  gdToken=null;gdUserId=null;gdDataFileId=null;gdHtmlFileId=null;
+  LS.set('ev4_gd_token',null);LS.set('ev4_gd_uid',null);
   gdSetStatus('☁️ לא מחובר','var(--tx2)');
   gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
 }
@@ -2577,7 +2594,7 @@ async function gdSaveData(){
       const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
         method:'POST',headers:{'Authorization':'Bearer '+gdToken},body:form});
       const j=await r.json();
-      gdDataFileId=j.id;LS.set('ev4_gd_data_fid',gdDataFileId);
+      gdDataFileId=j.id;LS.set(gdUserKey('gd_data_fid'),gdDataFileId);
     }
     // שמירת HTML
     await gdSaveHTML();
@@ -2603,7 +2620,7 @@ async function gdSaveHTML(){
     const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
       method:'POST',headers:{'Authorization':'Bearer '+gdToken},body:form});
     const j=await r.json();
-    gdHtmlFileId=j.id;LS.set('ev4_gd_html_fid',gdHtmlFileId);
+    gdHtmlFileId=j.id;LS.set(gdUserKey('gd_html_fid'),gdHtmlFileId);
   }
 }
 
@@ -2675,8 +2692,10 @@ function gdAutoSave(){
 (function gdInit(){
   gdShowBar();
   const saved=LS.get('ev4_gd_token',null);
-  if(saved){
-    gdToken=saved;
+  const uid=LS.get('ev4_gd_uid',null);
+  if(saved&&uid){
+    gdToken=saved;gdUserId=uid;
+    gdLoadUserIds();
     gdSetStatus('🔄 מתחבר...','var(--ac2)');
     gdSetBtn('התנתק',gdLogout,'var(--er)');
     gdSync();
