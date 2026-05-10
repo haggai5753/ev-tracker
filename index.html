@@ -297,6 +297,22 @@ body.light .tip-btn:hover{background:var(--ac);border-color:var(--ac);}
 .dash-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-bottom:12px;}
 @media(min-width:480px){.dash-kpis{grid-template-columns:repeat(4,1fr);}}
 .kpi{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:13px 14px;position:relative;overflow:hidden;}
+.kpi.kpi-clickable{cursor:pointer;transition:border-color .18s;}
+.kpi.kpi-clickable:hover{border-color:rgba(255,255,255,.18);}
+body.light .kpi.kpi-clickable:hover{border-color:rgba(0,0,0,.18);}
+.kpi.kpi-open{border-color:var(--ac)!important;}
+.kpi-hint{font-size:.58rem;color:var(--tx3);margin-bottom:3px;opacity:.7;}
+/* KPI chart: full-width panel injected into grid */
+.kpi-chart-row{grid-column:1/-1;animation:fi .2s ease;}
+.kpi-chart-panel-full{background:var(--sf);border:1px solid var(--ac);border-radius:var(--r);padding:14px 14px 10px;}
+.kpi-chart-panel-full canvas{width:100%!important;display:block;touch-action:none;}
+.kpi-chart-inner{margin-top:10px;border-top:1px solid var(--bd);padding-top:10px;animation:fi .2s ease;}
+.kpi-chart-panel{background:var(--sf);border:1px solid var(--ac);border-top:none;border-radius:0 0 var(--r) var(--r);padding:12px 14px 10px;margin-bottom:4px;animation:fi .2s ease;}
+.kpi-chart-panel canvas{width:100%!important;display:block;}
+.kpi-chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.kpi-chart-title{font-size:.7rem;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;}
+.kpi-chart-close{background:none;border:none;color:var(--tx3);cursor:pointer;font-size:.85rem;padding:2px 7px;border-radius:4px;font-family:var(--fn);}
+.kpi-chart-close:hover{color:var(--tx);background:var(--sf2);}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:var(--r) var(--r) 0 0;}
 .kpi.green::before{background:var(--ac);}
 .kpi.blue::before{background:var(--ac2);}
@@ -373,7 +389,7 @@ body.light .tip-btn:hover{background:var(--ac);border-color:var(--ac);}
 <div class="tc active" id="tab-data">
   <!-- כרטיסי KPI -->
   <div class="dash-kpis" id="dashKpis"></div>
-  <!-- שורה: גרף חיסכון מצטבר + מד יעילות -->
+    <!-- שורה: גרף חיסכון מצטבר + מד יעילות -->
   <div class="dash-row">
     <div class="card dash-card" id="dashSavingCard">
       <div class="ct"><div class="ctb" style="background:var(--ok)"></div>חיסכון מצטבר מדלק</div>
@@ -1489,6 +1505,458 @@ function renderMini(){ renderDashboard(); }
 // ══════════════════════════════════════════
 let kmOffset=0;
 let kmOffsetDirty=false; // true = המשתמש גלל ידנית
+let openKpiKey=null;
+
+// מטא-מידע לכל סוג KPI
+const KPI_META={
+  rate:   {label:'תעריף ממוצע',color:'#00c896',fmt:v=>v.toFixed(3)+' ₪',invertedGood:false},
+  costKm: {label:'₪ לק"מ',color:'#f59e0b',fmt:v=>fmtILS(v,4),invertedGood:true},
+  per100: {label:'1 ל-100 שקילות',color:'#f59e0b',fmt:v=>fmtNum(v,2),invertedGood:true},
+  range:  {label:'טווח ממוצע מחושב',color:'#00c896',fmt:v=>Math.round(v)+' ק"מ',invertedGood:false},
+  kwh100: {label:'צריכת חשמל ל-100 ק"מ',color:'#3b82f6',fmt:v=>fmtNum(v,2)+' קו"ש',invertedGood:true},
+  kwh:    {label:'סה"כ קו"ש חודשי',color:'#3b82f6',fmt:v=>fmtNum(v,1)+' קו"ש',invertedGood:false},
+  km:     {label:'סה"כ ק"מ חודשי',color:'#00c896',fmt:v=>fmtNum(v,0)+' ק"מ',invertedGood:false},
+  saving: {label:'חיסכון מדלק חודשי',color:'#22c55e',fmt:v=>fmtILS(v,0),invertedGood:false},
+  cost:   {label:'עלות חשמל חודשית',color:'#ef4444',fmt:v=>fmtILS(v,0),invertedGood:true},
+};
+
+function calcKpiMonthly(key){
+  const byM={};
+  for(const r of recs){
+    const ym=r.date.slice(0,7);
+    if(!byM[ym])byM[ym]={kwh:0,cost:0,km:0,fuelCost:0};
+    byM[ym].kwh+=(r.kwh||0);byM[ym].cost+=(r.cost||0);
+    if(r.kmDriven>0){byM[ym].km+=r.kmDriven;byM[ym].fuelCost+=r.kmDriven*(fuelPrice(r.date)/(stV("kpl")));}
+  }
+  const chargeCap=st.chargeKwh||stV("batt");
+  const pts=[];
+  for(const ym of Object.keys(byM).sort()){
+    const d=byM[ym];let val=null;
+    if(key==='rate'&&d.kwh>0)val=d.cost/d.kwh;
+    else if(key==='costKm'&&d.km>0)val=d.cost/d.km;
+    else if(key==='per100'&&d.km>0&&d.kwh>0){const avgElec=d.kwh>0?d.cost/d.kwh:homeRate(ym+'-01');const avgFuelLiter=d.fuelCost/d.km*(stV("kpl"));val=(1/(d.kwh/d.km))*(avgFuelLiter/avgElec);}
+    else if(key==='range'&&d.km>0&&d.kwh>0)val=(d.km/d.kwh)*chargeCap;
+    else if(key==='kwh100'&&d.km>0&&d.kwh>0)val=(d.kwh/d.km)*100;
+    else if(key==='kwh')val=d.kwh>0?d.kwh:null;
+    else if(key==='km')val=d.km>0?d.km:null;
+    else if(key==='saving')val=d.fuelCost-d.cost;
+    else if(key==='cost')val=d.cost>0?d.cost:null;
+    if(val!=null)pts.push({ym,val});
+  }
+  return pts;
+}
+
+function toggleKpiChart(key){
+  const sameKey=(openKpiKey===key);
+  if(!sameKey){_kpiViewStart=0;_kpiViewEnd=1;}
+  openKpiKey=sameKey?null:key;
+  _syncKpiChart();
+}
+
+function _syncKpiChart(){
+  const grid=$('dashKpis');if(!grid)return;
+  grid.querySelectorAll('.kpi[data-kkey]').forEach(el=>{
+    el.classList.toggle('kpi-open',el.dataset.kkey===openKpiKey);
+  });
+  if(!openKpiKey||!recs.length){
+    const old=grid.querySelector('.kpi-chart-row');if(old)old.remove();
+    return;
+  }
+  const existing=grid.querySelector('.kpi-chart-row');
+  if(existing&&existing.dataset.kkey===openKpiKey)return;
+  if(existing)existing.remove();
+  const row=document.createElement('div');
+  row.className='kpi-chart-row';
+  row.dataset.kkey=openKpiKey;
+  const meta=KPI_META[openKpiKey];
+  const TREE_KEYS=['kwh','km','saving','cost'];
+  if(TREE_KEYS.includes(openKpiKey)){
+    row.innerHTML=`<div class="kpi-chart-panel-full">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:.75rem;font-weight:700;color:var(--tx2)">${meta.label} — פירוט לפי תקופה</div>
+        <button class="kpi-chart-close" onclick="toggleKpiChart('${openKpiKey}')">✕ סגור</button>
+      </div>
+      <div id="kpiTree_${openKpiKey}">${_buildTreeHTML(openKpiKey)}</div>
+    </div>`;
+  } else {
+    const pts=calcKpiMonthly(openKpiKey);
+    const n=pts.length;
+    if(n<2){row.innerHTML=`<div class="kpi-chart-panel-full" style="text-align:center;color:var(--tx3);font-size:.8rem;padding:14px">נדרשים לפחות 2 חודשי נתונים</div>`;_insertRow(grid,row);return;}
+    const vals=pts.map(p=>p.val);
+    const minV=Math.min(...vals),maxV=Math.max(...vals);
+    const minIdx=vals.indexOf(minV),maxIdx=vals.indexOf(maxV);
+    const trendPct=pts[0].val>0?((pts[n-1].val-pts[0].val)/pts[0].val*100):0;
+    const goodTrend=meta.invertedGood?trendPct<=0:trendPct>=0;
+    const trendCol=goodTrend?'var(--ok)':'var(--er)';
+    const trendDir=trendPct>=0?'▲':'▼';
+    row.innerHTML=`<div class="kpi-chart-panel-full">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-size:.75rem;font-weight:700;color:var(--tx2)">${meta.label} — מגמה חודשית</div>
+          <div style="font-size:.67rem;color:${trendCol};font-weight:700;margin-top:2px">${trendDir} ${Math.abs(trendPct).toFixed(1)}% מהחודש הראשון</div>
+        </div>
+        <button class="kpi-chart-close" onclick="toggleKpiChart('${openKpiKey}')">✕ סגור</button>
+      </div>
+      <canvas id="kpiCanvas_${openKpiKey}" height="130"></canvas>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:7px;font-size:.65rem;color:var(--tx3)">
+        <span>● <b style="color:var(--tx)">${meta.fmt(pts[n-1].val)}</b> עכשיו (${pts[n-1].ym})</span>
+        <span style="color:#ef4444">▲ <b>${meta.fmt(maxV)}</b> מקסימום (${pts[maxIdx].ym})</span>
+        <span style="color:#22c55e">▼ <b>${meta.fmt(minV)}</b> מינימום (${pts[minIdx].ym})</span>
+      </div>
+      <div style="font-size:.58rem;color:var(--tx3);margin-top:4px;text-align:center">צבוט להגדלה · גרור להזזה · הקש פעמיים לאיפוס</div>
+    </div>`;
+    _insertRow(grid,row);
+    requestAnimationFrame(()=>{
+      const c=$('kpiCanvas_'+openKpiKey);
+      if(c)drawKpiChart(pts,meta,c);
+      attachKpiGestures(openKpiKey);
+    });
+    return;
+  }
+  _insertRow(grid,row);
+}
+
+function _insertRow(grid,row){
+  const allChildren=Array.from(grid.children).filter(el=>el.classList.contains('kpi'));
+  allChildren.forEach((el,i)=>{el.style.order=String(i*2);});
+  const cardIdx=allChildren.findIndex(el=>el.dataset.kkey===openKpiKey);
+  const colsStr=getComputedStyle(grid).gridTemplateColumns;
+  const cols=colsStr.trim().split(/\s+/).length||2;
+  const rowEnd=Math.min(allChildren.length-1,cardIdx+(cols-1-(cardIdx%cols)));
+  row.style.order=String(rowEnd*2+1);
+  grid.appendChild(row);
+}
+
+// ── Tree data ──
+function _treeData(key){
+  const byY={};
+  for(const r of recs){
+    const y=r.date.slice(0,4),ym=r.date.slice(0,7),d=r.date;
+    if(!byY[y])byY[y]={months:{}};
+    if(!byY[y].months[ym])byY[y].months[ym]={days:{}};
+    if(!byY[y].months[ym].days[d])byY[y].months[ym].days[d]={kwh:0,cost:0,km:0,fuelCost:0};
+    const dd=byY[y].months[ym].days[d];
+    dd.kwh+=(r.kwh||0);dd.cost+=(r.cost||0);
+    if(r.kmDriven>0){dd.km+=r.kmDriven;dd.fuelCost+=r.kmDriven*(fuelPrice(r.date)/(stV("kpl")));}
+  }
+  return byY;
+}
+
+function _treeVal(key,d){
+  if(key==='kwh')return d.kwh||0;
+  if(key==='km')return d.km||0;
+  if(key==='cost')return d.cost||0;
+  if(key==='saving')return(d.fuelCost||0)-(d.cost||0);
+  return 0;
+}
+
+function _treeSum(key,days){
+  return Object.values(days).reduce((s,d)=>s+_treeVal(key,d),0);
+}
+
+function _buildTreeHTML(key){
+  const meta=KPI_META[key];
+  const byY=_treeData(key);
+  const years=Object.keys(byY).sort().reverse();
+  const thS='padding:6px 10px;text-align:right;color:var(--tx3);font-size:.64rem;font-weight:700;border-bottom:1px solid var(--bd);background:var(--sf3);white-space:nowrap';
+  const fmtV=v=>key==='saving'?(v>=0?`<span style="color:var(--ok)">${meta.fmt(v)}</span>`:`<span style="color:var(--er)">${meta.fmt(v)}</span>`):meta.fmt(v);
+  let rows='';
+  for(const y of years){
+    const yMonths=byY[y].months;
+    const yAllDays=Object.values(yMonths).reduce((acc,m)=>Object.assign(acc,m.days),{});
+    const yVal=_treeSum(key,yAllDays);
+    const nM=Object.keys(yMonths).length;
+    rows+=`<tr onclick="kpiTreeToggleYear('${key}','${y}')" style="cursor:pointer;background:rgba(59,130,246,.1);border-bottom:1px solid rgba(59,130,246,.25)">
+      <td style="padding:7px 10px;font-weight:700;color:var(--ac2)"><span id="ktya_${key}_${y}">▸</span> ${y} <span style="font-size:.62rem;color:var(--tx3);font-weight:400">${nM} חודשים</span></td>
+      <td style="padding:7px 10px;text-align:left;font-weight:700;color:var(--ac2)">${fmtV(yVal)}</td>
+    </tr>`;
+    const months=Object.keys(yMonths).sort().reverse();
+    for(const ym of months){
+      const mDays=yMonths[ym].days;
+      const mVal=_treeSum(key,mDays);
+      const [,mo]=ym.split('-');
+      const nD=Object.keys(mDays).length;
+      const mKey=ym.replace('-','_');
+      rows+=`<tr id="ktm_${key}_${mKey}" onclick="kpiTreeToggleMonth('${key}','${ym}')" style="display:none;cursor:pointer;background:var(--sf2);border-bottom:1px solid var(--bd)">
+        <td style="padding:6px 10px 6px 22px;font-weight:600;color:var(--tx2)"><span id="ktma_${key}_${mKey}">▸</span> ${mo}/${y} <span style="font-size:.62rem;color:var(--tx3);font-weight:400">${nD} ימים</span></td>
+        <td style="padding:6px 10px;text-align:left;color:var(--tx2);font-weight:600">${fmtV(mVal)}</td>
+      </tr>`;
+      const days=Object.keys(mDays).sort().reverse();
+      for(const dd of days){
+        const dVal=_treeVal(key,mDays[dd]);
+        const [,,day]=dd.split('-');
+        rows+=`<tr id="ktd_${key}_${dd.replace(/-/g,'_')}" style="display:none;background:transparent;border-bottom:1px solid rgba(42,53,71,.3)">
+          <td style="padding:5px 10px 5px 34px;color:var(--tx3);font-size:.78rem">${day}/${mo}/${y}</td>
+          <td style="padding:5px 10px;text-align:left;font-size:.78rem;font-weight:600">${fmtV(dVal)}</td>
+        </tr>`;
+      }
+    }
+  }
+  return `<div style="overflow-x:auto;max-height:55vh;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--rs)">
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+      <thead><tr><th style="${thS}">תקופה</th><th style="${thS};text-align:left">${meta.label}</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+function kpiTreeToggleYear(key,y){
+  const arrow=document.getElementById(`ktya_${key}_${y}`);
+  const open=arrow&&arrow.textContent==='▸';
+  if(arrow)arrow.textContent=open?'▾':'▸';
+  // show/hide month rows for this year
+  document.querySelectorAll(`[id^="ktm_${key}_${y}_"],[id^="ktm_${key}_${y.replace('-','_')}"]`).forEach(el=>el.style.display=open?'':'none');
+  // also find by year prefix in id
+  const tbl=document.getElementById(`kpiTree_${key}`);
+  if(!tbl)return;
+  tbl.querySelectorAll('tr[id]').forEach(el=>{
+    if(el.id.startsWith(`ktm_${key}_${y}_`)||el.id===`ktm_${key}_${y.replace('-','_')}`){}
+  });
+  // simpler: find all month rows for this year
+  const allRows=document.querySelectorAll(`#kpiTree_${key} tr[id^="ktm_${key}_${y.replace('-','_')}"]`);
+  // try both separators
+  const monthRows=[
+    ...document.querySelectorAll(`#kpiTree_${key} tbody tr[id]`)
+  ].filter(el=>{
+    const id=el.id;
+    return id.startsWith(`ktm_${key}_`) && id.includes(`_${y.replace('-','_')}`)||
+           id.startsWith(`ktm_${key}_${y}_`);
+  });
+  // cleanest approach: rebuild and mark
+  _kpiTreeYearToggle(key,y,open);
+}
+
+function _kpiTreeYearToggle(key,y,open){
+  const tbl=document.querySelector(`#kpiTree_${key} tbody`);if(!tbl)return;
+  Array.from(tbl.rows).forEach(row=>{
+    const id=row.id;
+    if(!id)return;
+    // month row: ktm_key_YYYY_MM
+    if(id.match(new RegExp(`^ktm_${key}_${y}_`))){
+      row.style.display=open?'':'none';
+      // if closing year, also close month children
+      if(!open){
+        const mKey=id.replace(`ktm_${key}_`,'');
+        const arrow=document.getElementById(`ktma_${key}_${mKey}`);
+        if(arrow)arrow.textContent='▸';
+      }
+    }
+    // day row: ktd_key_YYYY_MM_DD
+    if(id.match(new RegExp(`^ktd_${key}_${y}_`))){
+      row.style.display='none';
+    }
+  });
+}
+
+function kpiTreeToggleMonth(key,ym){
+  const mKey=ym.replace('-','_');
+  const arrow=document.getElementById(`ktma_${key}_${mKey}`);
+  const open=arrow&&arrow.textContent==='▸';
+  if(arrow)arrow.textContent=open?'▾':'▸';
+  const [y,mo]=ym.split('-');
+  const tbl=document.querySelector(`#kpiTree_${key} tbody`);if(!tbl)return;
+  Array.from(tbl.rows).forEach(row=>{
+    const id=row.id;
+    if(!id)return;
+    if(id.match(new RegExp(`^ktd_${key}_${y}_${mo}_`))){
+      row.style.display=open?'':'none';
+    }
+  });
+}
+
+function renderKpiChartArea(){
+  _syncKpiChart();
+}
+
+// state for KPI chart pan/zoom
+let _kpiViewStart=0, _kpiViewEnd=1; // fraction 0..1 of the data range
+
+function drawKpiChart(pts,meta,canvas){
+  if(!canvas)canvas=$('kpiCanvas');if(!canvas)return;
+  const dpr=window.devicePixelRatio||1;
+  const W=Math.max(canvas.parentElement.offsetWidth-28,160);
+  const H=130;
+  canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+
+  // apply view window
+  const total=pts.length;
+  const iStart=Math.max(0,Math.floor(_kpiViewStart*(total-1)));
+  const iEnd=Math.min(total-1,Math.ceil(_kpiViewEnd*(total-1)));
+  const visible=pts.slice(iStart,iEnd+1);
+  if(visible.length<2)return;
+
+  const vals=visible.map(p=>p.val);
+  const minV=Math.min(...vals),maxV=Math.max(...vals);
+  const pad=Math.max((maxV-minV)*0.15,maxV*0.06)||1;
+  const pMin=minV-pad,pMax=maxV+pad;
+  const PAD={t:22,r:10,b:26,l:50}; // t=22 for dot labels above
+  const cw=W-PAD.l-PAD.r,ch=H-PAD.t-PAD.b;
+  const px=i=>PAD.l+i*(cw/Math.max(visible.length-1,1));
+  const py=v=>PAD.t+ch-((v-pMin)/(pMax-pMin))*ch;
+
+  // grid
+  ctx.strokeStyle=chartGridColor();ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  for(let i=1;i<=3;i++){const y=PAD.t+(ch/4)*i;ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(PAD.l+cw,y);ctx.stroke();}
+  ctx.setLineDash([]);
+
+  // area fill
+  const lineCol=meta.color;
+  const grad=ctx.createLinearGradient(0,PAD.t,0,PAD.t+ch);
+  grad.addColorStop(0,lineCol+'40');grad.addColorStop(1,lineCol+'08');
+  ctx.beginPath();ctx.moveTo(px(0),py(visible[0].val));
+  for(let i=1;i<visible.length;i++)ctx.lineTo(px(i),py(visible[i].val));
+  ctx.lineTo(px(visible.length-1),PAD.t+ch);ctx.lineTo(px(0),PAD.t+ch);
+  ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+
+  // line
+  ctx.beginPath();ctx.strokeStyle=lineCol;ctx.lineWidth=2.5;ctx.lineJoin='round';
+  ctx.moveTo(px(0),py(visible[0].val));
+  for(let i=1;i<visible.length;i++)ctx.lineTo(px(i),py(visible[i].val));
+  ctx.stroke();
+
+  // special dots: first, last, min, max — with labels
+  const vVals=visible.map(p=>p.val);
+  const minIdx=vVals.indexOf(Math.min(...vVals));
+  const maxIdx=vVals.indexOf(Math.max(...vVals));
+  const specialMap={};
+  // order matters: later entries override label position
+  [[0,'first'],[visible.length-1,'last'],[minIdx,'min'],[maxIdx,'max']].forEach(([i,role])=>{
+    if(!specialMap[i])specialMap[i]=[];
+    specialMap[i].push(role);
+  });
+  ctx.font='bold 8.5px Heebo,sans-serif';
+  for(const [iStr,roles] of Object.entries(specialMap)){
+    const i=+iStr;
+    const isMin=roles.includes('min'),isMax=roles.includes('max');
+    const dotCol=isMin?'#22c55e':isMax?'#ef4444':lineCol;
+    // dot
+    ctx.beginPath();ctx.arc(px(i),py(visible[i].val),4.5,0,Math.PI*2);ctx.fillStyle=dotCol;ctx.fill();
+    ctx.beginPath();ctx.arc(px(i),py(visible[i].val),2,0,Math.PI*2);ctx.fillStyle=isLight()?'#fff':'var(--sf)';ctx.fill();
+    // label above dot
+    const lbl=meta.fmt(visible[i].val);
+    const lblX=Math.min(PAD.l+cw-2,Math.max(PAD.l+2,px(i)));
+    const lblY=py(visible[i].val)-8;
+    ctx.fillStyle=dotCol;
+    ctx.textAlign=i===0?'left':i===visible.length-1?'right':'center';
+    ctx.fillText(lbl,lblX,Math.max(PAD.t-2,lblY));
+  }
+
+  // Y labels
+  ctx.fillStyle=chartLabelColor();ctx.font='9px Heebo,sans-serif';ctx.textAlign='right';
+  for(let i=0;i<=3;i++){
+    const v=pMin+(pMax-pMin)/3*i;
+    let lbl=meta.fmt(v);if(lbl.length>7)lbl=lbl.slice(0,7);
+    ctx.fillText(lbl,PAD.l-3,py(v)+4);
+  }
+
+  // X labels — spaced to avoid overlap (min 36px apart)
+  ctx.fillStyle=chartLabelColor2();ctx.font='9px Heebo,sans-serif';
+  const minSpacing=36;
+  const maxLabels=Math.max(2,Math.floor(cw/minSpacing));
+  const step=Math.max(1,Math.ceil(visible.length/maxLabels));
+  let lastLabelX=-999;
+  for(let i=0;i<visible.length;i+=step){
+    const xPos=px(i);
+    if(xPos-lastLabelX<minSpacing&&i>0)continue;
+    const[y,m]=visible[i].ym.split('-');
+    ctx.textAlign='center';ctx.fillText(m+'/'+y.slice(2),xPos,H-4);
+    lastLabelX=xPos;
+  }
+  // always show last label if it fits without overlapping previous
+  const lastX=px(visible.length-1);
+  if(lastX-lastLabelX>=minSpacing-4){
+    const[ly,lm]=visible[visible.length-1].ym.split('-');
+    ctx.textAlign='right';ctx.fillText(lm+'/'+ly.slice(2),lastX,H-4);
+  }
+
+  // zoom indicator strip (if zoomed in)
+  if(_kpiViewStart>0.01||_kpiViewEnd<0.99){
+    const stripH=3,stripY=H-3;
+    ctx.fillStyle=chartGridColor();ctx.fillRect(PAD.l,stripY,cw,stripH);
+    ctx.fillStyle=lineCol;
+    ctx.fillRect(PAD.l+cw*_kpiViewStart,stripY,cw*(_kpiViewEnd-_kpiViewStart),stripH);
+  }
+}
+
+// attach pinch/pan gestures to kpiCanvas after it's rendered
+function attachKpiGestures(key){
+  const c=$('kpiCanvas_'+key);if(!c)return;
+  c.style.touchAction='none'; // prevent browser scroll interfering
+
+  let lastDist=null,lastPanX=null;
+
+  function redraw(){
+    const pts2=calcKpiMonthly(key);
+    if(pts2&&pts2.length>=2)drawKpiChart(pts2,KPI_META[key],c);
+  }
+
+  c.addEventListener('touchstart',e=>{
+    e.preventDefault();
+    if(e.touches.length===2){
+      lastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      lastPanX=null;
+    } else if(e.touches.length===1){
+      lastPanX=e.touches[0].clientX;
+      lastDist=null;
+    }
+  },{passive:false});
+
+  c.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    const pts2=calcKpiMonthly(key);if(!pts2||pts2.length<2)return;
+    if(e.touches.length===2&&lastDist!==null){
+      // pinch zoom — zoom stays after release
+      const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      const scale=lastDist/dist;
+      const centerX=(e.touches[0].clientX+e.touches[1].clientX)/2;
+      const rect=c.getBoundingClientRect();
+      const PADl=50,cw=rect.width-PADl-10;
+      const frac=Math.max(0,Math.min(1,(centerX-rect.left-PADl)/cw));
+      const span=_kpiViewEnd-_kpiViewStart;
+      const minSpan=2/Math.max(pts2.length,2);
+      const newSpan=Math.min(1,Math.max(minSpan,span*scale));
+      const pivot=_kpiViewStart+frac*span;
+      _kpiViewStart=Math.max(0,pivot-frac*newSpan);
+      _kpiViewEnd=_kpiViewStart+newSpan;
+      if(_kpiViewEnd>1){_kpiViewEnd=1;_kpiViewStart=Math.max(0,1-newSpan);}
+      lastDist=dist;
+      drawKpiChart(pts2,KPI_META[key],c);
+    } else if(e.touches.length===1&&lastPanX!==null){
+      // pan — also stays after release
+      const dx=e.touches[0].clientX-lastPanX;
+      const rect=c.getBoundingClientRect();
+      const cw=rect.width-60;
+      const frac=-dx/cw;
+      const span=_kpiViewEnd-_kpiViewStart;
+      _kpiViewStart=Math.max(0,_kpiViewStart+frac);
+      _kpiViewEnd=_kpiViewStart+span;
+      if(_kpiViewEnd>1){_kpiViewEnd=1;_kpiViewStart=Math.max(0,1-span);}
+      lastPanX=e.touches[0].clientX;
+      drawKpiChart(pts2,KPI_META[key],c);
+    }
+  },{passive:false});
+
+  // on touchend: if 2→1 finger, keep zoom, switch to pan mode
+  c.addEventListener('touchend',e=>{
+    if(e.touches.length===1){
+      lastPanX=e.touches[0].clientX;
+      lastDist=null;
+    } else if(e.touches.length===0){
+      lastDist=null;lastPanX=null;
+      // zoom is already saved in _kpiViewStart/_kpiViewEnd — do nothing
+    }
+  },{passive:true});
+
+  // double-tap to reset zoom
+  let lastTap=0;
+  c.addEventListener('touchend',e=>{
+    if(e.changedTouches.length===1){
+      const now=Date.now();
+      if(now-lastTap<280){_kpiViewStart=0;_kpiViewEnd=1;redraw();}
+      lastTap=now;
+    }
+  },{passive:true});
+}
 
 function renderDashboard(){
   const kpiEl=$('dashKpis');
@@ -1500,6 +1968,7 @@ function renderDashboard(){
   if(!recs.length){
     kpiEl.innerHTML='<div class="mpty" style="grid-column:1/-1"><div class="mpty-i">⚡</div><p>אין טעינות עדיין<br>הזן נתונים ביומן</p></div>';
     [savCardEl,gauCardEl,kmCardEl,botEl].forEach(e=>{if(e)e.style.display='none';});
+    $('kpiChartArea').innerHTML='';
     return;
   }
   [savCardEl,gauCardEl,kmCardEl,botEl].forEach(e=>{if(e)e.style.display='';});
@@ -1525,8 +1994,10 @@ function renderDashboard(){
   const per100fuel=tkm>0&&tkw>0?(1/(tkw/tkm))*(curFuelMini/avgElecMini):null;
 
   // ─── KPI cards ───
-  function kpi(label,value,sub,colorClass,extraClass=''){
-    return `<div class="kpi ${colorClass} ${extraClass}">
+  function kpi(label,value,sub,colorClass,key=''){
+    const isOpen=openKpiKey===key;
+    const clickable=!!key;
+    return `<div class="kpi ${colorClass}${clickable?' kpi-clickable':''}${isOpen?' kpi-open':''}" ${clickable?`onclick="toggleKpiChart('${key}')" data-kkey="${key}"`:''}>${clickable?`<div class="kpi-hint">📈 לחץ לגרף מגמה</div>`:''}
       <div class="kpi-label">${label}</div>
       <div class="kpi-value ${colorClass}">${value}</div>
       ${sub?`<div class="kpi-sub">${sub}</div>`:''}
@@ -1534,17 +2005,18 @@ function renderDashboard(){
   }
   const savedColor=saved>=0?'ok':'red';
   kpiEl.innerHTML=
-    kpi('סה"כ עלות חשמל',fmtILS(tco,0),'מתחילת המעקב','red')+
-    kpi('חיסכון מדלק',fuelTotal>0?fmtILS(saved,0):'—','לעומת דלק שקילה',savedColor)+
-    kpi('₪ לק"מ',ckm>0?fmtILS(ckm,4):'—',curFuel>0?`דלק: ${fmtILS(curFuel/(stV("kpl")),4)}/ק"מ`:'','yellow')+
-    kpi('סה"כ ק"מ',fmtNum(tkm,0),'שנסעו ברכב','blue')+
-    kpi('סה"כ קו"ש',fmtNum(tkw,1),'שנטענו','green')+
-    kpi('1 ל-100 שקילות',per100fuel!=null?fmtNum(per100fuel,1):'—','שקילות לרכב דלק','yellow')+
-    kpi('צריכת חשמל ל-100 ק"מ',qkm>0?fmtNum(qkm*100,2)+' קו"ש':'—','','blue')+
-    kpi('טווח ממוצע מחושב',avgRange>0?Math.round(avgRange)+' ק"מ':'—',st.range?`מוצהר: ${st.range} ק"מ`:'','green')+
-    kpi('תעריף ממוצע',avgRate>0?avgRate.toFixed(3)+' ₪':'—','₪ לקו"ש','green')+
+    kpi('סה"כ עלות חשמל',fmtILS(tco,0),'מתחילת המעקב','red','cost')+
+    kpi('חיסכון מדלק',fuelTotal>0?fmtILS(saved,0):'—','לעומת דלק שקילה',savedColor,'saving')+
+    kpi('₪ לק"מ',ckm>0?fmtILS(ckm,4):'—',curFuel>0?`דלק: ${fmtILS(curFuel/(stV("kpl")),4)}/ק"מ`:'','yellow','costKm')+
+    kpi('סה"כ ק"מ',fmtNum(tkm,0),'שנסעו ברכב','blue','km')+
+    kpi('סה"כ קו"ש',fmtNum(tkw,1),'שנטענו','green','kwh')+
+    kpi('1 ל-100 שקילות',per100fuel!=null?fmtNum(per100fuel,1):'—','שקילות לרכב דלק','yellow','per100')+
+    kpi('צריכת חשמל ל-100 ק"מ',qkm>0?fmtNum(qkm*100,2)+' קו"ש':'—','','blue','kwh100')+
+    kpi('טווח ממוצע מחושב',avgRange>0?Math.round(avgRange)+' ק"מ':'—',st.range?`מוצהר: ${st.range} ק"מ`:'','green','range')+
+    kpi('תעריף ממוצע',avgRate>0?avgRate.toFixed(3)+' ₪':'—','₪ לקו"ש','green','rate')+
     kpi('חיבורים',fmtNum(recs.length,0),'סה"כ טעינות','blue');
 
+  renderKpiChartArea();
   drawSavingChart();
   drawGauge(effPct);
   drawKmChart();
@@ -2897,6 +3369,7 @@ const _resizeObs=new ResizeObserver(()=>{
   _resizeTimer=setTimeout(()=>{
     drawSavingChart();
     drawKmChart();
+    if(openKpiKey){const pts=calcKpiMonthly(openKpiKey);const c=$('kpiCanvas_'+openKpiKey);if(pts.length>=2&&c)drawKpiChart(pts,KPI_META[openKpiKey],c);}
   },80);
 });
 ['dashSavingCard','dashKmCard','dashGaugeCard'].forEach(id=>{
