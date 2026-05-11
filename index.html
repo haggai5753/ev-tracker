@@ -570,7 +570,7 @@ body.light .kpi.kpi-clickable:hover{border-color:rgba(0,0,0,.18);}
       <div class="hint">לדוגמה: סוללה 70 קו"ש אך בטעינה מלאה מגיע ל-80 קו"ש — הזן 80</div>
     </div>
     <div class="fr">
-      <div class="f"><label>⚡ קו"ש ל-100 ק"מ (מוצהר)</label><input type="number" id="sDeclKwh100" placeholder="מחושב אוטומטית" step="0.01" readonly style="background:var(--sf3);color:var(--tx2);cursor:default;opacity:.8"><div class="hint" id="sDeclKwhCalc" style="color:var(--tx3)">= קיבולת סוללה ÷ טווח × 100</div></div>
+      <div class="f"><label>⚡ קו"ש ל-100 ק"מ</label><input type="number" id="sDeclKwh100" placeholder="מחושב אוטומטית" step="0.01" readonly style="background:var(--sf3);color:var(--tx2);cursor:default;opacity:.8"><div class="hint" id="sDeclKwhCalc" style="color:var(--tx3)">= קיבולת סוללה ÷ טווח × 100</div></div>
       <div class="f"><label>🏎️ כ"ס</label><input type="number" id="sKw" placeholder="204" oninput="saveSt()"></div>
     </div>
     <div class="fr">
@@ -1576,8 +1576,10 @@ function _syncKpiChart(){
         <div style="font-size:.75rem;font-weight:700;color:var(--tx2)">${meta.label} — פירוט לפי תקופה</div>
         <button class="kpi-chart-close" onclick="toggleKpiChart('${openKpiKey}')">✕ סגור</button>
       </div>
-      <div id="kpiTree_${openKpiKey}">${_buildTreeHTML(openKpiKey)}</div>
+      <div id="kpiTreeChart_${openKpiKey}"></div>
     </div>`;
+    _insertRow(grid,row);
+    requestAnimationFrame(()=>_initTreeChart(openKpiKey));
   } else {
     const pts=calcKpiMonthly(openKpiKey);
     const n=pts.length;
@@ -1611,9 +1613,7 @@ function _syncKpiChart(){
       if(c)drawKpiChart(pts,meta,c);
       attachKpiGestures(openKpiKey);
     });
-    return;
   }
-  _insertRow(grid,row);
 }
 
 function _insertRow(grid,row){
@@ -1641,7 +1641,6 @@ function _treeData(key){
   }
   return byY;
 }
-
 function _treeVal(key,d){
   if(key==='kwh')return d.kwh||0;
   if(key==='km')return d.km||0;
@@ -1649,119 +1648,152 @@ function _treeVal(key,d){
   if(key==='saving')return(d.fuelCost||0)-(d.cost||0);
   return 0;
 }
-
 function _treeSum(key,days){
   return Object.values(days).reduce((s,d)=>s+_treeVal(key,d),0);
 }
-
+const _treeLevel={};
 function _buildTreeHTML(key){
+  return '<div id="kpiTreeChart_'+key+'"></div>';
+}
+function _initTreeChart(key){
+  if(!_treeLevel[key])_treeLevel[key]='years';
+  _buildTreeChart(key);
+}
+function _buildTreeChart(key){
   const meta=KPI_META[key];
   const byY=_treeData(key);
-  const years=Object.keys(byY).sort().reverse();
-  const thS='padding:6px 10px;text-align:right;color:var(--tx3);font-size:.64rem;font-weight:700;border-bottom:1px solid var(--bd);background:var(--sf3);white-space:nowrap';
-  const fmtV=v=>key==='saving'?(v>=0?`<span style="color:var(--ok)">${meta.fmt(v)}</span>`:`<span style="color:var(--er)">${meta.fmt(v)}</span>`):meta.fmt(v);
-  let rows='';
-  for(const y of years){
-    const yMonths=byY[y].months;
-    const yAllDays=Object.values(yMonths).reduce((acc,m)=>Object.assign(acc,m.days),{});
-    const yVal=_treeSum(key,yAllDays);
-    const nM=Object.keys(yMonths).length;
-    rows+=`<tr onclick="kpiTreeToggleYear('${key}','${y}')" style="cursor:pointer;background:rgba(59,130,246,.1);border-bottom:1px solid rgba(59,130,246,.25)">
-      <td style="padding:7px 10px;font-weight:700;color:var(--ac2)"><span id="ktya_${key}_${y}">▸</span> ${y} <span style="font-size:.62rem;color:var(--tx3);font-weight:400">${nM} חודשים</span></td>
-      <td style="padding:7px 10px;text-align:left;font-weight:700;color:var(--ac2)">${fmtV(yVal)}</td>
-    </tr>`;
-    const months=Object.keys(yMonths).sort().reverse();
+  const level=_treeLevel[key]||'years';
+  let labels=[],vals=[],title='',backLevel=null,canDrill=false;
+  if(level==='years'){
+    title=meta.label+' — לפי שנה';canDrill=true;
+    const years=Object.keys(byY).sort();
+    _treeLevel['_yList_'+key]=years;
+    for(const y of years){
+      const allDays=Object.values(byY[y].months).reduce((acc,m)=>Object.assign(acc,m.days),{});
+      labels.push(y);vals.push(_treeSum(key,allDays));
+    }
+  } else if(level.startsWith('months:')){
+    const y=level.split(':')[1];backLevel='years';title=y+' — לפי חודש';canDrill=true;
+    const months=Object.keys(byY[y]?.months||{}).sort();
+    _treeLevel['_mList_'+key]=months;
     for(const ym of months){
-      const mDays=yMonths[ym].days;
-      const mVal=_treeSum(key,mDays);
       const [,mo]=ym.split('-');
-      const nD=Object.keys(mDays).length;
-      const mKey=ym.replace('-','_');
-      rows+=`<tr id="ktm_${key}_${mKey}" onclick="kpiTreeToggleMonth('${key}','${ym}')" style="display:none;cursor:pointer;background:var(--sf2);border-bottom:1px solid var(--bd)">
-        <td style="padding:6px 10px 6px 22px;font-weight:600;color:var(--tx2)"><span id="ktma_${key}_${mKey}">▸</span> ${mo}/${y} <span style="font-size:.62rem;color:var(--tx3);font-weight:400">${nD} ימים</span></td>
-        <td style="padding:6px 10px;text-align:left;color:var(--tx2);font-weight:600">${fmtV(mVal)}</td>
-      </tr>`;
-      const days=Object.keys(mDays).sort().reverse();
-      for(const dd of days){
-        const dVal=_treeVal(key,mDays[dd]);
-        const [,,day]=dd.split('-');
-        rows+=`<tr id="ktd_${key}_${dd.replace(/-/g,'_')}" style="display:none;background:transparent;border-bottom:1px solid rgba(42,53,71,.3)">
-          <td style="padding:5px 10px 5px 34px;color:var(--tx3);font-size:.78rem">${day}/${mo}/${y}</td>
-          <td style="padding:5px 10px;text-align:left;font-size:.78rem;font-weight:600">${fmtV(dVal)}</td>
-        </tr>`;
-      }
+      labels.push(mo);vals.push(_treeSum(key,byY[y].months[ym].days));
+    }
+  } else if(level.startsWith('days:')){
+    const ym=level.split(':')[1];const [y,mo]=ym.split('-');
+    backLevel='months:'+y;title=mo+'/'+y+' — לפי יום';
+    const days=Object.keys(byY[y]?.months[ym]?.days||{}).sort();
+    for(const d of days){
+      const ddata=byY[y].months[ym].days[d];
+      const dVal=_treeVal(key,ddata);
+      // skip days with no relevant data for this key
+      if((key==='km'||key==='saving')&&ddata.km===0)continue;
+      const [,,day]=d.split('-');
+      labels.push(day);vals.push(dVal);
     }
   }
-  return `<div style="overflow-x:auto;max-height:55vh;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--rs)">
-    <table style="width:100%;border-collapse:collapse;font-size:.8rem">
-      <thead><tr><th style="${thS}">תקופה</th><th style="${thS};text-align:left">${meta.label}</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>`;
+  const el=document.getElementById('kpiTreeChart_'+key);if(!el)return;
+  const backBtn=backLevel?'<button onclick="kpiTreeDrillUp(\''+key+'\',\''+backLevel+'\')" style="background:var(--sf2);border:1px solid var(--bd);border-radius:var(--rs);color:var(--tx2);font-family:var(--fn);font-size:.72rem;padding:4px 10px;cursor:pointer">◀ חזרה</button>':'';
+  const hint=canDrill&&labels.length>1?'<div style="font-size:.6rem;color:var(--tx3);text-align:center;margin-top:3px">לחץ על עמוד לפירוט</div>':'';
+  // compute total for title
+  const _tot=vals.reduce((s,v)=>s+v,0);
+  function _fmtTot(v){
+    const abs=Math.abs(v);const sign=v<0?'-':'';
+    if(key==='saving'||key==='cost'){if(abs>=1000)return sign+'₪'+(abs/1000).toFixed(1)+'k';return sign+'₪'+abs.toFixed(0);}
+    if(key==='km'){if(abs>=1000)return sign+(abs/1000).toFixed(1)+'k';return sign+abs.toFixed(0);}
+    if(key==='kwh'){if(abs>=1000)return sign+(abs/1000).toFixed(1)+'k';return sign+abs.toFixed(1);}
+    return sign+abs.toFixed(1);
+  }
+  const titleWithTotal=title+' — סה"כ: '+_fmtTot(_tot);
+  el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px"><div style="font-size:.72rem;font-weight:700;color:var(--tx2)">'+titleWithTotal+'</div>'+backBtn+'</div><canvas id="kpiBarCanvas_'+key+'" height="150"></canvas>'+hint;
+  requestAnimationFrame(function(){_drawTreeBar(key,labels,vals,meta,level,byY,canDrill);});
 }
+function _drawTreeBar(key,labels,vals,meta,level,byY,canDrill){
+  const canvas=document.getElementById('kpiBarCanvas_'+key);if(!canvas)return;
+  const dpr=window.devicePixelRatio||1;
+  const W=Math.max(canvas.parentElement.offsetWidth-4,160);const H=150;
+  canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+  const n=labels.length;if(!n)return;
+  const hasNeg=vals.some(function(v){return v<0;});
+  const posMax=Math.max.apply(null,vals.concat([0]))||1;
+  const negMin=Math.min.apply(null,vals.concat([0]))||0;
+  const range=(posMax-negMin)||1;
+  const PAD={t:18,r:6,b:28,l:52};
+  const cw=W-PAD.l-PAD.r,ch=H-PAD.t-PAD.b;
+  const zeroY=PAD.t+ch*(posMax/range);
+  const bw=Math.max(6,Math.floor(cw/n*0.72));
+  const spacing=cw/n;
+  const lineCol=meta.color;
 
-function kpiTreeToggleYear(key,y){
-  const arrow=document.getElementById(`ktya_${key}_${y}`);
-  const open=arrow&&arrow.textContent==='▸';
-  if(arrow)arrow.textContent=open?'▾':'▸';
-  // show/hide month rows for this year
-  document.querySelectorAll(`[id^="ktm_${key}_${y}_"],[id^="ktm_${key}_${y.replace('-','_')}"]`).forEach(el=>el.style.display=open?'':'none');
-  // also find by year prefix in id
-  const tbl=document.getElementById(`kpiTree_${key}`);
-  if(!tbl)return;
-  tbl.querySelectorAll('tr[id]').forEach(el=>{
-    if(el.id.startsWith(`ktm_${key}_${y}_`)||el.id===`ktm_${key}_${y.replace('-','_')}`){}
-  });
-  // simpler: find all month rows for this year
-  const allRows=document.querySelectorAll(`#kpiTree_${key} tr[id^="ktm_${key}_${y.replace('-','_')}"]`);
-  // try both separators
-  const monthRows=[
-    ...document.querySelectorAll(`#kpiTree_${key} tbody tr[id]`)
-  ].filter(el=>{
-    const id=el.id;
-    return id.startsWith(`ktm_${key}_`) && id.includes(`_${y.replace('-','_')}`)||
-           id.startsWith(`ktm_${key}_${y}_`);
-  });
-  // cleanest approach: rebuild and mark
-  _kpiTreeYearToggle(key,y,open);
-}
+  function fmtY(v){
+    if(key==='saving'||key==='cost'){
+      const abs=Math.abs(v);const sign=v<0?'-':'';
+      if(abs>=1000)return sign+'₪'+(abs/1000).toFixed(1)+'k';
+      return sign+'₪'+abs.toFixed(0);
+    }
+    if(key==='km'){const abs=Math.abs(v);const sign=v<0?'-':'';return sign+(abs>=1000?(abs/1000).toFixed(1)+'k':abs.toFixed(0));}
+    if(key==='kwh'){const abs=Math.abs(v);const sign=v<0?'-':'';return sign+(abs>=1000?(abs/1000).toFixed(1)+'k':abs.toFixed(1));}
+    let lbl=meta.fmt(v);if(lbl.length>7)lbl=lbl.slice(0,7);return lbl;
+  }
+  function fmtBar(v){
+    const abs=Math.abs(v);const sign=v<0?'-':'';
+    if(key==='saving'||key==='cost'){if(abs>=1000)return sign+'₪'+(abs/1000).toFixed(1)+'k';return sign+'₪'+abs.toFixed(0);}
+    if(key==='km'){if(abs>=1000)return sign+(abs/1000).toFixed(1)+'k';return sign+abs.toFixed(0);}
+    if(key==='kwh'){if(abs>=1000)return sign+(abs/1000).toFixed(1)+'k';if(abs>=100)return sign+abs.toFixed(0);return sign+abs.toFixed(1);}
+    let lbl=meta.fmt(abs);if(lbl.length>6)lbl=lbl.slice(0,6);return sign+lbl;
+  }
+  // grid lines
+  ctx.strokeStyle=chartGridColor();ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  for(let i=1;i<=3;i++){const y=PAD.t+(ch/4)*i;ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(PAD.l+cw,y);ctx.stroke();}
+  if(hasNeg){ctx.strokeStyle=isLight()?'rgba(0,0,0,.2)':'rgba(255,255,255,.2)';ctx.lineWidth=1.5;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(PAD.l,zeroY);ctx.lineTo(PAD.l+cw,zeroY);ctx.stroke();}
+  ctx.setLineDash([]);
 
-function _kpiTreeYearToggle(key,y,open){
-  const tbl=document.querySelector(`#kpiTree_${key} tbody`);if(!tbl)return;
-  Array.from(tbl.rows).forEach(row=>{
-    const id=row.id;
-    if(!id)return;
-    // month row: ktm_key_YYYY_MM
-    if(id.match(new RegExp(`^ktm_${key}_${y}_`))){
-      row.style.display=open?'':'none';
-      // if closing year, also close month children
-      if(!open){
-        const mKey=id.replace(`ktm_${key}_`,'');
-        const arrow=document.getElementById(`ktma_${key}_${mKey}`);
-        if(arrow)arrow.textContent='▸';
+  vals.forEach(function(v,i){
+    const x=PAD.l+spacing*i+(spacing-bw)/2;
+    const isNeg=v<0;
+    const barH=Math.max(2,Math.abs(v)/range*ch);
+    const y=isNeg?zeroY:zeroY-barH;
+    const col=key==='saving'?(isNeg?'#ef4444':'#22c55e'):lineCol;
+    const grad=ctx.createLinearGradient(0,y,0,y+barH);
+    grad.addColorStop(0,col+'ee');grad.addColorStop(1,col+'55');
+    ctx.fillStyle=grad;
+    if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,bw,barH,3);ctx.fill();}
+    else ctx.fillRect(x,y,bw,barH);
+    if(barH>14){
+      ctx.fillStyle='rgba(255,255,255,.85)';ctx.font='bold 7.5px Heebo,sans-serif';ctx.textAlign='center';
+      ctx.fillText(fmtBar(v),x+bw/2,isNeg?y+barH-4:y+11);
+    }
+    ctx.fillStyle=chartLabelColor();ctx.font='9px Heebo,sans-serif';ctx.textAlign='center';
+    ctx.fillText(labels[i],x+bw/2,H-4);
+  });
+
+  ctx.fillStyle=chartLabelColor();ctx.font='9px Heebo,sans-serif';ctx.textAlign='right';
+  for(let i=0;i<=3;i++){
+    const v=negMin+(range/3)*i;
+    ctx.fillText(fmtY(v),PAD.l-3,PAD.t+ch-(ch/3)*i+4);
+  }
+  if(canvas._kpiClick)canvas.removeEventListener('click',canvas._kpiClick);
+  if(canDrill){
+    canvas._kpiClick=function(e){
+      const rect=canvas.getBoundingClientRect();
+      const xClick=(e.clientX-rect.left)*(W/rect.width);
+      const idx=Math.floor((xClick-PAD.l)/spacing);
+      if(idx<0||idx>=n)return;
+      if(level==='years'){
+        const yl=_treeLevel['_yList_'+key]||[];
+        if(yl[idx])kpiTreeDrillDown(key,'months:'+yl[idx]);
+      } else if(level.startsWith('months:')){
+        const ml=_treeLevel['_mList_'+key]||[];
+        if(ml[idx])kpiTreeDrillDown(key,'days:'+ml[idx]);
       }
-    }
-    // day row: ktd_key_YYYY_MM_DD
-    if(id.match(new RegExp(`^ktd_${key}_${y}_`))){
-      row.style.display='none';
-    }
-  });
+    };
+    canvas.addEventListener('click',canvas._kpiClick);
+  }
 }
-
-function kpiTreeToggleMonth(key,ym){
-  const mKey=ym.replace('-','_');
-  const arrow=document.getElementById(`ktma_${key}_${mKey}`);
-  const open=arrow&&arrow.textContent==='▸';
-  if(arrow)arrow.textContent=open?'▾':'▸';
-  const [y,mo]=ym.split('-');
-  const tbl=document.querySelector(`#kpiTree_${key} tbody`);if(!tbl)return;
-  Array.from(tbl.rows).forEach(row=>{
-    const id=row.id;
-    if(!id)return;
-    if(id.match(new RegExp(`^ktd_${key}_${y}_${mo}_`))){
-      row.style.display=open?'':'none';
-    }
-  });
-}
+function kpiTreeDrillDown(key,level){_treeLevel[key]=level;_buildTreeChart(key);}
+function kpiTreeDrillUp(key,level){_treeLevel[key]=level;_buildTreeChart(key);}
 
 function renderKpiChartArea(){
   _syncKpiChart();
@@ -1840,6 +1872,19 @@ function drawKpiChart(pts,meta,canvas){
     ctx.textAlign=i===0?'left':i===visible.length-1?'right':'center';
     ctx.fillText(lbl,lblX,Math.max(PAD.t-2,lblY));
   }
+
+  // average line (updates with zoom)
+  const avgVal=visible.reduce((s,p)=>s+p.val,0)/visible.length;
+  const avgY=py(avgVal);
+  ctx.beginPath();
+  ctx.strokeStyle=isLight()?'rgba(0,0,0,.18)':'rgba(255,255,255,.28)';
+  ctx.lineWidth=1.2;ctx.setLineDash([5,4]);
+  ctx.moveTo(PAD.l,avgY);ctx.lineTo(PAD.l+cw,avgY);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=isLight()?'rgba(0,0,0,.4)':'rgba(255,255,255,.5)';
+  ctx.font='8px Heebo,sans-serif';ctx.textAlign='right';
+  let avgLbl='~'+meta.fmt(avgVal);if(avgLbl.length>13)avgLbl=avgLbl.slice(0,13);
+  ctx.fillText(avgLbl,PAD.l+cw,avgY-3);
 
   // Y labels
   ctx.fillStyle=chartLabelColor();ctx.font='9px Heebo,sans-serif';ctx.textAlign='right';
@@ -2014,7 +2059,7 @@ function renderDashboard(){
     kpi('צריכת חשמל ל-100 ק"מ',qkm>0?fmtNum(qkm*100,2)+' קו"ש':'—','','blue','kwh100')+
     kpi('טווח ממוצע מחושב',avgRange>0?Math.round(avgRange)+' ק"מ':'—',st.range?`מוצהר: ${st.range} ק"מ`:'','green','range')+
     kpi('תעריף ממוצע',avgRate>0?avgRate.toFixed(3)+' ₪':'—','₪ לקו"ש','green','rate')+
-    kpi('חיבורים',fmtNum(recs.length,0),'סה"כ טעינות','blue');
+    kpi('חיבורים',fmtNum(recs.length,0),`${(tkw/(stV('chargeKwh')||stV('batt'))).toFixed(1)} טעינות מלאות`,'blue');
 
   renderKpiChartArea();
   drawSavingChart();
