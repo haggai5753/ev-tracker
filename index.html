@@ -4206,7 +4206,7 @@ function gdLogout(){
 
 // איסוף כל הנתונים
 function gdCollectData(){
-  return {recs,cos,homeRates,fuelRates,st,carBattery:LS.get('ev4_bat',null),carEff:LS.get('ev4_eff',null),theme:LS.get('ev4_theme','dark')};
+  return {recs,cos,homeRates,fuelRates,st,expenses,carBattery:LS.get('ev4_bat',null),carEff:LS.get('ev4_eff',null),theme:LS.get('ev4_theme','dark')};
 }
 
 // שמירת JSON לדרייב
@@ -4281,6 +4281,7 @@ async function gdLoadData(){
     if(d.homeRates)homeRates=d.homeRates;
     if(d.fuelRates)fuelRates=d.fuelRates;
     if(d.st){st=Object.assign({},ST_DEF,d.st);LS.set('ev4_st',st);}
+    if(d.expenses){expenses=d.expenses;LS.set('ev4_expenses',expenses);}
     if(d.carBattery)LS.set('ev4_bat',d.carBattery);
     if(d.carEff)LS.set('ev4_eff',d.carEff);
     // theme — שמור את הבחירה המקומית, אל תדרוס
