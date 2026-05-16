@@ -3169,6 +3169,7 @@ function impJSONSel(e){
       if(doRt&&d.fuelRates){fuelRates=d.fuelRates;LS.set('ev4_fuel',fuelRates);}
       if(doS&&d.st){st=Object.assign({},ST_DEF,d.st);LS.set('ev4_st',st);}
       if(doExp&&d.expenses){expenses=d.expenses;saveExpLS();}
+      LS.set('ev4_savedAt',Date.now());
       recalc();renderAll();toast('✅ ייבוא הושלם');gdAutoSave();
     }catch(err){toast('⚠️ קובץ לא תקין: '+err.message,'e');}
     e.target.value='';
@@ -4206,7 +4207,9 @@ function gdLogout(){
 
 // איסוף כל הנתונים
 function gdCollectData(){
-  return {recs,cos,homeRates,fuelRates,st,expenses,carBattery:LS.get('ev4_bat',null),carEff:LS.get('ev4_eff',null),theme:LS.get('ev4_theme','dark')};
+  const _savedAt=Date.now();
+  LS.set('ev4_savedAt',_savedAt);
+  return {recs,cos,homeRates,fuelRates,st,expenses,_savedAt,carBattery:LS.get('ev4_bat',null),carEff:LS.get('ev4_eff',null),theme:LS.get('ev4_theme','dark')};
 }
 
 // שמירת JSON לדרייב
@@ -4268,10 +4271,10 @@ async function gdLoadData(){
       headers:{'Authorization':'Bearer '+gdToken}});
     if(!r.ok)return false;
     const d=await r.json();
-    // אם יש יותר נתונים מקומיים — שמור לענן במקום לטעון
-    const cloudRecs=(d.recs||[]).length;
-    const localRecs=recs.length;
-    if(localRecs>cloudRecs){
+    // השווה לפי timestamp — מי עודכן לאחרונה מנצח
+    const cloudTs=d._savedAt||0;
+    const localTs=LS.get('ev4_savedAt',0);
+    if(localTs>cloudTs){
       toast('☁️ נתונים מקומיים חדשים יותר — שומר לענן');
       await gdSaveData();
       return true;
@@ -4284,7 +4287,7 @@ async function gdLoadData(){
     if(d.expenses){expenses=d.expenses;LS.set('ev4_expenses',expenses);}
     if(d.carBattery)LS.set('ev4_bat',d.carBattery);
     if(d.carEff)LS.set('ev4_eff',d.carEff);
-    // theme — שמור את הבחירה המקומית, אל תדרוס
+    LS.set('ev4_savedAt',cloudTs);
     LS.set('ev4_recs',recs);LS.set('ev4_cos',cos);LS.set('ev4_hr',homeRates);LS.set('ev4_fuel',fuelRates);
     renderAll();
     return true;
