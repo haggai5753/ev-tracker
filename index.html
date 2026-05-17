@@ -930,8 +930,12 @@ const LS={
   get(k,d){try{const v=localStorage.getItem(this._k(k));return v!=null?JSON.parse(v):d;}catch{return d;}},
   set(k,v){localStorage.setItem(this._k(k),JSON.stringify(v));}
 };
-// הגדר uid לפני טעינת נתונים ראשונית
-(function(){const _su=localStorage.getItem('ev4_gd_uid');const _st=localStorage.getItem('ev4_gd_token');if(_su&&_st){try{const u=JSON.parse(_su);const t=JSON.parse(_st);if(u&&t)LS._uid=u;}catch{}}})();
+// הגדר uid לפני כל טעינת נתונים — כך הנתונים תמיד נטענים מהמפתח הנכון
+try{
+  const _uid=JSON.parse(localStorage.getItem('ev4_gd_uid'));
+  const _tok=JSON.parse(localStorage.getItem('ev4_gd_token'));
+  if(_uid&&_tok)LS._uid=_uid;
+}catch{}
 const $=id=>document.getElementById(id);
 
 let cos=LS.get('ev4_cos',[
@@ -3202,27 +3206,30 @@ async function delSelected(cloud){
   if(!doR&&!doC&&!doRt&&!doS&&!doExp){toast('⚠️ לא נבחר כלום','e');return;}
   const items=[doR&&'היסטוריה',doC&&'חברות',doRt&&'תעריפים',doS&&'הגדרות',doExp&&'הוצאות'].filter(Boolean).join(', ');
   if(!confirm(`למחוק: ${items}${cloud?' + ענן':''}?\nלא ניתן לשחזר!`))return;
-  const clearKey=(k)=>{localStorage.removeItem(k);if(gdUserId)localStorage.removeItem('u'+gdUserId+'_'+k);};
-  if(doR){recs=[];clearKey('ev4_recs');clearKey('ev4_savedAt');}
-  if(doC){cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];LS.set('ev4_cos',cos);clearKey('ev4_cos');}
-  if(doRt){homeRates=[];fuelRates=[];clearKey('ev4_hr');clearKey('ev4_fuel');clearKey('ev4_hr_init');}
-  if(doS){st={showCost:true};clearKey('ev4_st');clearKey('ev4_bat');clearKey('ev4_eff');}
-  if(doExp){expenses=[];clearKey('ev4_expenses');saveExpLS();}
-  recalc();renderAll();
+  const ck=(k)=>{localStorage.removeItem(k);if(gdUserId)localStorage.removeItem('u'+gdUserId+'_'+k);};
+  const COS_DEF=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];
+  if(doR){recs=[];ck('ev4_recs');ck('ev4_savedAt');}
+  if(doC){cos=COS_DEF;ck('ev4_cos');}
+  if(doRt){homeRates=[];fuelRates=[];ck('ev4_hr');ck('ev4_fuel');ck('ev4_hr_init');}
+  if(doS){st=Object.assign({},ST_DEF);ck('ev4_st');ck('ev4_bat');ck('ev4_eff');}
+  if(doExp){expenses=[];ck('ev4_expenses');}
+  recalc();renderAll();renderExp();
   if(cloud&&gdToken){
     try{
       if(gdDataFileId){
         await fetch(`https://www.googleapis.com/drive/v3/files/${gdDataFileId}`,{method:'DELETE',headers:{'Authorization':'Bearer '+gdToken}});
-        gdDataFileId=null;if(gdUserId)LS.set(gdUserKey('gd_data_fid'),null);
+        gdDataFileId=null;ck(gdUserKey('gd_data_fid'));
       }
       if(gdHtmlFileId){
         await fetch(`https://www.googleapis.com/drive/v3/files/${gdHtmlFileId}`,{method:'DELETE',headers:{'Authorization':'Bearer '+gdToken}});
-        gdHtmlFileId=null;if(gdUserId)LS.set(gdUserKey('gd_html_fid'),null);
+        gdHtmlFileId=null;ck(gdUserKey('gd_html_fid'));
       }
       toast('🗑️ נמחק מקומית ומהענן');
     }catch{toast('🗑️ נמחק מקומית, שגיאה בענן','w');}
   } else {
-    toast('🗑️ נמחק');
+    // מחיקה מקומית בלבד — שמור לענן את הנתונים החדשים (הריקים)
+    if(gdToken)gdAutoSave();
+    toast('🗑️ נמחק מקומית');
   }
 }
 
@@ -4174,15 +4181,8 @@ function gdLoadUserIds(){
 function gdShowBar(){
   const bar=$('gdBar');
   if(bar)bar.style.transform='translateY(0)';
-  // דחוף תוכן מטה
   const wrap=document.querySelector('.app-wrap')||document.querySelector('body>div');
   if(wrap)wrap.style.paddingTop='38px';
-}
-function gdHideBar(){
-  const bar=$('gdBar');
-  if(bar)bar.style.transform='translateY(-60px)';
-  const wrap=document.querySelector('.app-wrap')||document.querySelector('body>div');
-  if(wrap)wrap.style.paddingTop='';
 }
 function gdSetStatus(txt,color){
   const s=$('gdStatus');if(s){s.textContent=txt;s.style.color=color||'var(--tx2)';}
@@ -4207,21 +4207,12 @@ function gdLogin(){
         const u=await r.json();
         gdUserId=u.id;
         localStorage.setItem('ev4_gd_uid',JSON.stringify(gdUserId));
-        // הגדר LS לעבוד עם uid זה וטען נתוני המשתמש
         LS._uid=gdUserId;
-        recs=LS.get('ev4_recs',recs);
-        cos=LS.get('ev4_cos',cos);
-        homeRates=LS.get('ev4_hr',homeRates);
-        fuelRates=LS.get('ev4_fuel',fuelRates);
-        st=LS.get('ev4_st',st);
-        expenses=LS.get('ev4_expenses',expenses);
-        tblExpandY=LS.get('ev4_tblY',{});tblExpandM=LS.get('ev4_tblM',{});
-        const _th=LS.get('ev4_theme','dark');document.body.classList.toggle('light',_th==='light');syncThemeBtns();
-        recalc();renderAll();
       }catch{}
       gdLoadUserIds();
       gdSetStatus('✅ מחובר','var(--ac)');
       gdSetBtn('התנתק',gdLogout,'var(--er)');
+      // התחברות חדשה — תמיד טען מהענן (ענן מנצח מקומי)
       gdSync();
     }
   });
@@ -4229,6 +4220,7 @@ function gdLogin(){
 }
 
 function gdLogout(){
+  // התנתקות — שמור נתונים מקומית תחת uid, אחר כך נקה session
   gdToken=null;gdUserId=null;gdDataFileId=null;gdHtmlFileId=null;
   LS._uid=null;
   localStorage.setItem('ev4_gd_token',JSON.stringify(null));
@@ -4335,18 +4327,37 @@ async function gdSync(){
   if(!gdToken)return;
   gdSetStatus('🔄 מסנכרן...','var(--ac2)');
   try{
-    // מצא קבצים קיימים
+    // מצא קבצים קיימים בענן
     if(!gdDataFileId){const id=await gdFindFile(GD_DATA_FILE);if(id){gdDataFileId=id;if(gdUserId)LS.set(gdUserKey('gd_data_fid'),id);}}
     if(!gdHtmlFileId){const id=await gdFindFile(GD_HTML_FILE);if(id){gdHtmlFileId=id;if(gdUserId)LS.set(gdUserKey('gd_html_fid'),id);}}
+    const localTs=LS.get('ev4_savedAt',0);
     if(gdDataFileId){
-      const loaded=await gdLoadData();
-      if(loaded){toast('☁️ נתונים נטענו מהענן');gdSetStatus('✅ מסונכרן','var(--ac)');}
-      else await gdSaveData();
+      // יש קובץ ענן — בדוק מי חדש יותר
+      const hdr=await fetch(`https://www.googleapis.com/drive/v3/files/${gdDataFileId}?fields=modifiedTime`,{
+        headers:{'Authorization':'Bearer '+gdToken}});
+      const meta=await hdr.json();
+      const cloudTs=meta.modifiedTime?new Date(meta.modifiedTime).getTime():0;
+      if(cloudTs>localTs){
+        // ענן חדש יותר — טען ממנו
+        const loaded=await gdLoadData();
+        if(loaded){toast('☁️ נתונים נטענו מהענן');gdSetStatus('✅ מסונכרן','var(--ac)');}
+        else gdSetStatus('⚠️ שגיאה בטעינה','var(--er)');
+      } else {
+        // מקומי חדש יותר (או שווה) — שמור לענן
+        await gdSaveData();
+        gdSetStatus('✅ מסונכרן','var(--ac)');
+      }
     } else {
-      await gdSaveData();
-      toast('☁️ גיבוי ראשון נשמר בענן');
+      // אין קובץ ענן
+      const localRecs=LS.get('ev4_recs',[]);
+      if(localRecs.length>0||recs.length>0){
+        // יש נתונים מקומיים — שמור לענן
+        await gdSaveData();
+        toast('☁️ גיבוי נשמר בענן');
+      }
+      gdSetStatus('✅ מחובר','var(--ac)');
     }
-  } catch{gdSetStatus('❌ שגיאת סנכרון','var(--er)');}
+  } catch(e){gdSetStatus('❌ שגיאת סנכרון','var(--er)');}
 }
 
 // שמירה אוטומטית — מופעלת אחרי כל שינוי
@@ -4356,7 +4367,7 @@ function gdAutoSave(){
   gdAutoSaveTimer=setTimeout(gdSaveData,2000);
 }
 
-// ניסיון שחזור טוקן קיים בטעינה
+// אתחול בטעינה
 (function gdInit(){
   gdShowBar();
   const savedToken=localStorage.getItem('ev4_gd_token');
@@ -4364,22 +4375,17 @@ function gdAutoSave(){
   const token=savedToken?JSON.parse(savedToken):null;
   const uid=savedUid?JSON.parse(savedUid):null;
   if(token&&uid){
-    gdToken=token;gdUserId=uid;
-    LS._uid=uid;
-    // טען נתוני המשתמש הספציפי
-    recs=LS.get('ev4_recs',recs);
-    cos=LS.get('ev4_cos',cos);
-    homeRates=LS.get('ev4_hr',homeRates);
-    fuelRates=LS.get('ev4_fuel',fuelRates);
-    st=LS.get('ev4_st',st);
-    expenses=LS.get('ev4_expenses',expenses);
-    tblExpandY=LS.get('ev4_tblY',{});tblExpandM=LS.get('ev4_tblM',{});
-    const _th=LS.get('ev4_theme','dark');document.body.classList.toggle('light',_th==='light');syncThemeBtns();
-    recalc();renderAll();
+    // משתמש מחובר — הגדר uid ב-LS לפני הכל
+    gdToken=token;gdUserId=uid;LS._uid=uid;
     gdLoadUserIds();
     gdSetStatus('🔄 מתחבר...','var(--ac2)');
     gdSetBtn('התנתק',gdLogout,'var(--er)');
+    // טען מהענן — אם אין קובץ ענן, השתמש במה שב-localStorage
     gdSync();
+  } else {
+    // לא מחובר — הצג כפתור התחברות
+    gdSetStatus('☁️ לא מחובר','var(--tx2)');
+    gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
   }
 })();
 
