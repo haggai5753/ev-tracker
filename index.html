@@ -3515,9 +3515,7 @@ const EXP_ICONS={ביטוח:'🛡️',טיפול:'🔧',צמיגים:'🔄',אג
 
 function saveExpLS(){
   LS.set('ev4_expenses',expenses);
-  LS.set('ev4_savedAt',Date.now());
-  clearTimeout(gdAutoSaveTimer);
-  gdSaveData();
+  gdAutoSave();
 }
 
 function renderExp(){
