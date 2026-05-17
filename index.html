@@ -3516,8 +3516,7 @@ const EXP_ICONS={ביטוח:'🛡️',טיפול:'🔧',צמיגים:'🔄',אג
 function saveExpLS(){
   LS.set('ev4_expenses',expenses);
   LS.set('ev4_savedAt',Date.now());
-  clearTimeout(gdAutoSaveTimer);
-  gdSaveData();
+  gdAutoSave();
 }
 
 function renderExp(){
@@ -4138,7 +4137,7 @@ let gdToken=null;
 let gdUserId=null;
 let gdDataFileId=null;
 let gdHtmlFileId=null;
-let gdSyncing=false;
+let gdSyncing=false;let gdDirty=false;
 let gdAutoSaveTimer=null;
 
 function gdUserKey(k){return gdUserId?`ev4_${gdUserId}_${k}`:null;}
@@ -4191,6 +4190,7 @@ function gdLogin(){
         homeRates=LS.get('ev4_hr',homeRates);
         fuelRates=LS.get('ev4_fuel',fuelRates);
         st=LS.get('ev4_st',st);
+        expenses=LS.get('ev4_expenses',expenses);
         tblExpandY=LS.get('ev4_tblY',{});tblExpandM=LS.get('ev4_tblM',{});
         const _th=LS.get('ev4_theme','dark');document.body.classList.toggle('light',_th==='light');syncThemeBtns();
         recalc();renderAll();
@@ -4222,8 +4222,9 @@ function gdCollectData(){
 
 // שמירת JSON לדרייב
 async function gdSaveData(){
-  if(!gdToken||gdSyncing)return;
-  gdSyncing=true;
+  if(!gdToken)return;
+  if(gdSyncing){gdDirty=true;return;}
+  gdSyncing=true;gdDirty=false;
   gdSetStatus('💾 שומר...','var(--ac3)');
   try{
     const body=JSON.stringify(gdCollectData(),null,2);
@@ -4249,6 +4250,7 @@ async function gdSaveData(){
     gdSetStatus(`✅ סונכרן ${now}`,'var(--ac)');
   } catch(e){gdSetStatus('❌ שגיאת שמירה','var(--er)');}
   gdSyncing=false;
+  if(gdDirty)gdSaveData();
 }
 
 // שמירת קובץ HTML לדרייב
@@ -4292,7 +4294,8 @@ async function gdLoadData(){
     if(d.homeRates)homeRates=d.homeRates;
     if(d.fuelRates)fuelRates=d.fuelRates;
     if(d.st){st=Object.assign({},ST_DEF,d.st);LS.set('ev4_st',st);}
-    if(d.expenses){expenses=d.expenses;LS.set('ev4_expenses',expenses);}
+    const localExpTs=LS.get('ev4_savedAt',0);
+    if(d.expenses&&!(localExpTs>cloudTs)){expenses=d.expenses;LS.set('ev4_expenses',expenses);}
     if(d.carBattery)LS.set('ev4_bat',d.carBattery);
     if(d.carEff)LS.set('ev4_eff',d.carEff);
     LS.set('ev4_savedAt',cloudTs);
@@ -4352,6 +4355,7 @@ function gdAutoSave(){
     homeRates=LS.get('ev4_hr',homeRates);
     fuelRates=LS.get('ev4_fuel',fuelRates);
     st=LS.get('ev4_st',st);
+    expenses=LS.get('ev4_expenses',expenses);
     tblExpandY=LS.get('ev4_tblY',{});tblExpandM=LS.get('ev4_tblM',{});
     const _th=LS.get('ev4_theme','dark');document.body.classList.toggle('light',_th==='light');syncThemeBtns();
     recalc();renderAll();
