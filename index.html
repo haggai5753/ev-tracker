@@ -4190,6 +4190,7 @@ function gdLogin(){
         homeRates=LS.get('ev4_hr',homeRates);
         fuelRates=LS.get('ev4_fuel',fuelRates);
         st=LS.get('ev4_st',st);
+        expenses=LS.get('ev4_expenses',expenses);
         tblExpandY=LS.get('ev4_tblY',{});tblExpandM=LS.get('ev4_tblM',{});
         const _th=LS.get('ev4_theme','dark');document.body.classList.toggle('light',_th==='light');syncThemeBtns();
         recalc();renderAll();
@@ -4354,6 +4355,7 @@ function gdAutoSave(){
     homeRates=LS.get('ev4_hr',homeRates);
     fuelRates=LS.get('ev4_fuel',fuelRates);
     st=LS.get('ev4_st',st);
+    expenses=LS.get('ev4_expenses',expenses);
     tblExpandY=LS.get('ev4_tblY',{});tblExpandM=LS.get('ev4_tblM',{});
     const _th=LS.get('ev4_theme','dark');document.body.classList.toggle('light',_th==='light');syncThemeBtns();
     recalc();renderAll();
