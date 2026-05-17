@@ -1104,17 +1104,17 @@ function delRec(id,e){
 }
 function clearAll(){
   if(!confirm('למחוק את כל הנתונים המקומיים?'))return;
-  recs=[];expenses=[];
-  LS.set('ev4_recs',recs);LS.set('ev4_expenses',expenses);
+  recs=[];expenses=[];cos=[];homeRates=[];fuelRates=[];st=Object.assign({},ST_DEF);
+  ['ev4_recs','ev4_expenses','ev4_cos','ev4_hr','ev4_fuel','ev4_st','ev4_savedAt','ev4_bat','ev4_eff'].forEach(k=>LS.set(k,null));
   LS.set('ev4_savedAt',0);
-  renderAll();renderExp();toast('🗑️ הכל נמחק');
+  recalc();renderAll();renderExp();toast('🗑️ הכל נמחק');
 }
 async function clearAllCloud(){
   if(!confirm('למחוק את כל הנתונים — גם מקומית וגם מהענן?\nלא ניתן לשחזר!'))return;
-  recs=[];expenses=[];
-  LS.set('ev4_recs',recs);LS.set('ev4_expenses',expenses);
+  recs=[];expenses=[];cos=[];homeRates=[];fuelRates=[];st=Object.assign({},ST_DEF);
+  ['ev4_recs','ev4_expenses','ev4_cos','ev4_hr','ev4_fuel','ev4_st','ev4_savedAt','ev4_bat','ev4_eff'].forEach(k=>LS.set(k,null));
   LS.set('ev4_savedAt',0);
-  renderAll();renderExp();
+  recalc();renderAll();renderExp();
   if(!gdToken||!gdDataFileId){toast('🗑️ נמחק מקומית (אין חיבור לענן)');return;}
   try{
     await fetch(`https://www.googleapis.com/drive/v3/files/${gdDataFileId}`,{
