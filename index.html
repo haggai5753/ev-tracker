@@ -930,6 +930,8 @@ const LS={
   get(k,d){try{const v=localStorage.getItem(this._k(k));return v!=null?JSON.parse(v):d;}catch{return d;}},
   set(k,v){localStorage.setItem(this._k(k),JSON.stringify(v));}
 };
+// הגדר uid לפני טעינת נתונים ראשונית
+(function(){const _su=localStorage.getItem('ev4_gd_uid');const _st=localStorage.getItem('ev4_gd_token');if(_su&&_st){try{const u=JSON.parse(_su);const t=JSON.parse(_st);if(u&&t)LS._uid=u;}catch{}}})();
 const $=id=>document.getElementById(id);
 
 let cos=LS.get('ev4_cos',[
@@ -1102,18 +1104,23 @@ function delRec(id,e){
   if(!confirm('למחוק?'))return;
   recs=recs.filter(r=>r.id!==id);recalc();LS.set('ev4_recs',recs);renderAll();toast('🗑️ נמחק');gdAutoSave();
 }
+const DATA_KEYS=['ev4_recs','ev4_expenses','ev4_cos','ev4_hr','ev4_fuel','ev4_st','ev4_savedAt','ev4_bat','ev4_eff','ev4_hr_init','ev4_tblY','ev4_tblM','ev4_openYears','ev4_openMonths','ev4_openCos','ev4_insYearOpen'];
+function lsClearAll(){
+  DATA_KEYS.forEach(k=>{
+    localStorage.removeItem(k);
+    if(gdUserId)localStorage.removeItem('u'+gdUserId+'_'+k);
+  });
+}
 function clearAll(){
   if(!confirm('למחוק את כל הנתונים המקומיים?'))return;
-  recs=[];expenses=[];cos=[];homeRates=[];fuelRates=[];st=Object.assign({},ST_DEF);
-  ['ev4_recs','ev4_expenses','ev4_cos','ev4_hr','ev4_fuel','ev4_st','ev4_savedAt','ev4_bat','ev4_eff'].forEach(k=>LS.set(k,null));
-  LS.set('ev4_savedAt',0);
+  recs=[];expenses=[];cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];homeRates=[];fuelRates=[];st=Object.assign({},ST_DEF);
+  lsClearAll();
   recalc();renderAll();renderExp();toast('🗑️ הכל נמחק');
 }
 async function clearAllCloud(){
   if(!confirm('למחוק את כל הנתונים — גם מקומית וגם מהענן?\nלא ניתן לשחזר!'))return;
-  recs=[];expenses=[];cos=[];homeRates=[];fuelRates=[];st=Object.assign({},ST_DEF);
-  ['ev4_recs','ev4_expenses','ev4_cos','ev4_hr','ev4_fuel','ev4_st','ev4_savedAt','ev4_bat','ev4_eff'].forEach(k=>LS.set(k,null));
-  LS.set('ev4_savedAt',0);
+  recs=[];expenses=[];cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];homeRates=[];fuelRates=[];st=Object.assign({},ST_DEF);
+  lsClearAll();
   recalc();renderAll();renderExp();
   if(!gdToken){toast('🗑️ נמחק מקומית (אין חיבור לענן)');return;}
   try{
@@ -3195,11 +3202,12 @@ async function delSelected(cloud){
   if(!doR&&!doC&&!doRt&&!doS&&!doExp){toast('⚠️ לא נבחר כלום','e');return;}
   const items=[doR&&'היסטוריה',doC&&'חברות',doRt&&'תעריפים',doS&&'הגדרות',doExp&&'הוצאות'].filter(Boolean).join(', ');
   if(!confirm(`למחוק: ${items}${cloud?' + ענן':''}?\nלא ניתן לשחזר!`))return;
-  if(doR){recs=[];LS.set('ev4_recs',recs);}
-  if(doC){cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];LS.set('ev4_cos',cos);}
-  if(doRt){homeRates=[];fuelRates=[];LS.set('ev4_hr',homeRates);LS.set('ev4_fuel',fuelRates);}
-  if(doS){st={showCost:true};LS.set('ev4_st',st);}
-  if(doExp){expenses=[];saveExpLS();}
+  const clearKey=(k)=>{localStorage.removeItem(k);if(gdUserId)localStorage.removeItem('u'+gdUserId+'_'+k);};
+  if(doR){recs=[];clearKey('ev4_recs');clearKey('ev4_savedAt');}
+  if(doC){cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];LS.set('ev4_cos',cos);clearKey('ev4_cos');}
+  if(doRt){homeRates=[];fuelRates=[];clearKey('ev4_hr');clearKey('ev4_fuel');clearKey('ev4_hr_init');}
+  if(doS){st={showCost:true};clearKey('ev4_st');clearKey('ev4_bat');clearKey('ev4_eff');}
+  if(doExp){expenses=[];clearKey('ev4_expenses');saveExpLS();}
   recalc();renderAll();
   if(cloud&&gdToken){
     try{
