@@ -3249,24 +3249,37 @@ async function delSelected(cloud){
   if(!doR&&!doC&&!doRt&&!doS&&!doExp){toast('⚠️ לא נבחר כלום','e');return;}
   const items=[doR&&'היסטוריה',doC&&'חברות',doRt&&'תעריפים',doS&&'נתוני רכב',doExp&&'הוצאות'].filter(Boolean).join(', ');
   if(!await confirmAsync(`למחוק: ${items}${cloud?' + ענן':''}?`))return;
+
+  // מחק לפי המפתח הנכון — עם uid אם קיים
+  function clearKey(k){
+    localStorage.removeItem(k);
+    if(LS._uid){localStorage.removeItem(`u${LS._uid}_${k}`);}
+  }
+
   const COS_DEF=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];
-  if(doR){recs=[];LS.set('ev4_recs',[]);LS.set('ev4_savedAt',0);}
-  if(doC){cos=COS_DEF;LS.set('ev4_cos',COS_DEF);}
-  if(doRt){homeRates=[];fuelRates=[];LS.set('ev4_hr',[]);LS.set('ev4_fuel',[]);LS.set('ev4_hr_init',false);}
-  if(doS){st=Object.assign({},ST_DEF);LS.set('ev4_st',ST_DEF);}
-  if(doExp){expenses=[];LS.set('ev4_expenses',[]);}
+
+  if(doR){recs=[];clearKey('ev4_recs');clearKey('ev4_savedAt');}
+  if(doC){cos=[...COS_DEF];clearKey('ev4_cos');}
+  if(doRt){
+    homeRates=[];fuelRates=[];
+    clearKey('ev4_hr');clearKey('ev4_fuel');clearKey('ev4_hr_init');
+    // מנע אתחול מחדש מהנתונים המובנים
+    localStorage.setItem('ev4_hr_init',JSON.stringify(true));
+    if(LS._uid)localStorage.setItem(`u${LS._uid}_ev4_hr_init`,JSON.stringify(true));
+  }
+  if(doS){st=Object.assign({},ST_DEF);clearKey('ev4_st');clearKey('ev4_bat');clearKey('ev4_eff');}
+  if(doExp){expenses=[];clearKey('ev4_expenses');}
+
   recalc();renderAll();renderExp();
+  loadSt();renderCoBtns();renderCoList();renderRates();renderFuelHist();
+
   if(cloud&&gdToken){
     try{
       await gdSaveData();
       toast('🗑️ נמחק מקומית ומהענן');
     }catch{toast('🗑️ נמחק מקומית, שגיאה בשמירה לענן','w');}
-    // לאחר שמירה לענן — reload יטען את המצב הנקי
-    localStorage.setItem('ev4_justCleared','1');
-    setTimeout(()=>location.reload(),1200);
   } else {
-    // מחיקה מקומית בלבד — reload יטען מהענן (זו הכוונה)
-    toast('🗑️ נמחק מקומית');setTimeout(()=>location.reload(),800);
+    toast('🗑️ נמחק');
   }
 }
 
