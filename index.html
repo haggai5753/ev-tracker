@@ -747,7 +747,7 @@ body.light .kpi.kpi-clickable:hover{border-color:rgba(0,0,0,.18);}
         </label>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.87rem">
           <span style="flex:1">הוצאות רכב</span>
-          <div class="chk-wrap" onclick="toggleChk('del_exp')"><div class="chk-box chk-red" id="del_exp" data-on="0"></div></div>
+          <div class="chk-wrap" onclick="toggleChk('del_exp')"><div class="chk-box chk-red" id="del_exp" data-on="1"></div></div>
         </label>
       </div>
       <div style="display:flex;gap:8px">
@@ -3236,6 +3236,8 @@ async function delSelected(cloud){
         await fetch(`https://www.googleapis.com/drive/v3/files/${gdHtmlFileId}`,{method:'DELETE',headers:{'Authorization':'Bearer '+gdToken}});
         gdHtmlFileId=null;ck(gdUserKey('gd_html_fid'));
       }
+      gdSetStatus('✅ מחובר','var(--ac)');gdSetHdrStatus('✅ מחובר');
+      gdSetBtn('התנתק',gdLogout,'var(--er)');
       toast('🗑️ נמחק מקומית ומהענן');
     }catch{toast('🗑️ נמחק מקומית, שגיאה בענן','w');}
   } else {
@@ -4336,6 +4338,7 @@ async function gdLoadData(){
 async function gdFindFile(name){
   const r=await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${name}'&fields=files(id,name)`,{
     headers:{'Authorization':'Bearer '+gdToken}});
+  if(r.status===401){const e=new Error('401');e.status=401;throw e;}
   const j=await r.json();
   return j.files&&j.files.length?j.files[0].id:null;
 }
@@ -4375,7 +4378,21 @@ async function gdSync(){
       }
       gdSetStatus('✅ מחובר','var(--ac)');
     }
-  } catch(e){gdSetStatus('❌ שגיאת סנכרון','var(--er)');}
+  } catch(e){
+    // בדוק אם הטוקן פג תוקף (401)
+    const is401=e&&(e.status===401||String(e).includes('401')||(e.message&&e.message.includes('401')));
+    if(is401||!gdToken){
+      gdToken=null;
+      localStorage.setItem('ev4_gd_token',JSON.stringify(null));
+      gdSetStatus('⚠️ פג תוקף — התחבר מחדש','var(--er)');
+      gdSetHdrStatus('⚠️ פג תוקף');
+      gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
+    } else {
+      gdSetStatus('❌ שגיאת סנכרון','var(--er)');
+      gdSetHdrStatus('❌ שגיאת סנכרון');
+      gdSetBtn('התנתק',gdLogout,'var(--er)');
+    }
+  }
 }
 
 // שמירה אוטומטית — מופעלת אחרי כל שינוי
