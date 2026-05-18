@@ -3525,14 +3525,7 @@ function openAddEntry(){
 function openSettingsDrawer(){
   $('settingsDrawer').classList.add('open');
   syncThemeBtns();
-  // סנכרן כפתור ענן לפי מצב נוכחי
-  if(gdToken){
-    gdSetBtn('התנתק',gdLogout,'var(--er)');
-    gdSetStatus(gdStatusText||'✅ מחובר','var(--ac)');
-  } else {
-    gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
-    gdSetStatus('☁️ לא מחובר','var(--tx3)');
-  }
+  syncGdBtn();
 }
 function closeSettingsDrawer(){$('settingsDrawer').classList.remove('open');}
 
@@ -4228,6 +4221,15 @@ function gdSetBtn(label,fn,color){
   const b=$('gdBtn');if(b){b.textContent=label;b.onclick=fn;b.style.background=color||'var(--ac2)';}
   // desktop sidebar button
   const bs=$('gdSideBtn');if(bs){bs.textContent=label;bs.onclick=fn;bs.style.background=color||'var(--ac2)';}
+}
+function syncGdBtn(){
+  if(gdToken){
+    gdSetBtn('התנתק',gdLogout,'var(--er)');
+    gdSetStatus(gdStatusText||'✅ מחובר','var(--ac)');
+  } else {
+    gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
+    gdSetStatus('☁️ לא מחובר','var(--tx3)');
+  }
 }
 
 function confirmAsync(msg){
