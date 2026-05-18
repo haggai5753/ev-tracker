@@ -488,7 +488,7 @@ body.light .kpi.kpi-clickable:hover{border-color:rgba(0,0,0,.18);}
       <div style="font-size:.7rem;color:var(--tx3)" id="searchInfo">לחץ על שורה לפרטים</div>
       <div class="ta-right">
         <button class="gbtn g" onclick="expCSV()">📤 CSV</button>
-        <button class="gbtn d" onclick="clearAll()">🗑️ נקה</button>
+        <button class="gbtn d" onclick="clearRecs()">🗑️ נקה</button>
       </div>
     </div>
     <div class="tw">
@@ -1156,6 +1156,13 @@ function lsClearAll(){
     localStorage.removeItem(k);
     if(gdUserId)localStorage.removeItem('u'+gdUserId+'_'+k);
   });
+}
+async function clearRecs(){
+  if(!await confirmAsync('למחוק את כל היסטוריית הטעינות?'))return;
+  recs=[];
+  LS.set('ev4_recs',[]);
+  recalc();renderAll();toast('🗑️ היסטוריה נמחקה');
+  gdAutoSave();
 }
 async function clearAll(){
   if(!await confirmAsync('למחוק את כל הנתונים המקומיים?'))return;
