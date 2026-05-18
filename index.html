@@ -980,7 +980,6 @@ const $=id=>document.getElementById(id);
 
 let cos=LS.get('ev4_cos',[
   {id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},
-  {id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false},
 ]);
 let homeRates=LS.get('ev4_hr',[]);
 const MONTHLY_RATES=[{"date":"2023-08-01","fuelPrice":6.86,"elecRate":0.625},{"date":"2023-09-01","fuelPrice":6.94,"elecRate":0.625},{"date":"2023-10-01","fuelPrice":6.94,"elecRate":0.625},{"date":"2023-11-01","fuelPrice":6.94,"elecRate":0.625},{"date":"2023-12-01","fuelPrice":6.94,"elecRate":0.625},{"date":"2024-01-01","fuelPrice":7.22,"elecRate":0.6145},{"date":"2024-02-01","fuelPrice":7.38,"elecRate":0.6145},{"date":"2024-03-01","fuelPrice":7.51,"elecRate":0.6145},{"date":"2024-04-01","fuelPrice":7.72,"elecRate":0.6145},{"date":"2024-05-01","fuelPrice":7.9,"elecRate":0.6145},{"date":"2024-06-01","fuelPrice":7.52,"elecRate":0.6145},{"date":"2024-07-01","fuelPrice":7.56,"elecRate":0.6145},{"date":"2024-08-01","fuelPrice":7.48,"elecRate":0.6145},{"date":"2024-09-01","fuelPrice":7.29,"elecRate":0.6145},{"date":"2024-10-01","fuelPrice":7.16,"elecRate":0.6145},{"date":"2024-11-01","fuelPrice":7.2,"elecRate":0.6145},{"date":"2024-12-01","fuelPrice":7.12,"elecRate":0.6145},{"date":"2025-01-01","fuelPrice":7.2,"elecRate":0.6402},{"date":"2025-02-01","fuelPrice":7.31,"elecRate":0.6402},{"date":"2025-03-01","fuelPrice":7.23,"elecRate":0.6402},{"date":"2025-04-01","fuelPrice":7.31,"elecRate":0.6402},{"date":"2025-05-01","fuelPrice":7.13,"elecRate":0.6402},{"date":"2025-06-01","fuelPrice":7.14,"elecRate":0.6402},{"date":"2025-07-01","fuelPrice":7.15,"elecRate":0.6402},{"date":"2025-08-01","fuelPrice":7.07,"elecRate":0.6402},{"date":"2025-09-01","fuelPrice":7.16,"elecRate":0.6402},{"date":"2025-10-01","fuelPrice":7.23,"elecRate":0.6402},{"date":"2025-11-01","fuelPrice":7.07,"elecRate":0.6402},{"date":"2025-12-01","fuelPrice":7.11,"elecRate":0.6402},{"date":"2026-01-01","fuelPrice":6.85,"elecRate":0.6432},{"date":"2026-02-01","fuelPrice":6.88,"elecRate":0.6432},{"date":"2026-03-01","fuelPrice":7.02,"elecRate":0.6432},{"date":"2026-04-01","fuelPrice":8.05,"elecRate":0.6432}];
@@ -995,8 +994,9 @@ function initMonthlyRates(){
 let fuelRates=LS.get('ev4_fuel',[]);
 let recs=LS.get('ev4_recs',[]);
 const ST_DEF={carName:'',batt:70,range:485,kpl:12.125,fuel:7.2,showCost:true,declKwh100:null,kw:null,chargeKwh:null,carCost:null,monthly:null};
+const ST_EMPTY={carName:'',batt:null,range:null,kpl:null,fuel:null,showCost:true,declKwh100:null,kw:null,chargeKwh:null,carCost:null,monthly:null};
 function stV(k){const v=st[k];return(v==null||v===''||isNaN(v))?ST_DEF[k]:v;}
-let st=Object.assign({},ST_DEF,LS.get('ev4_st',{}));
+let st=LS.get('ev4_st',{});
 let editCoIdx=null;
 let selCo=cos.find(c=>c.isDefault)?.id||cos[0]?.id;
 let expandedRow=null; // id of expanded row
@@ -1041,8 +1041,9 @@ function dl(blob,name){const u=URL.createObjectURL(blob);const a=document.create
 // RATE LOOKUPS
 // ══════════════════════════════════════════
 function homeRate(ds){
+  if(!homeRates.length)return 0;
   const s=[...homeRates].sort((a,b)=>a.date.localeCompare(b.date));
-  let r=s[0]?.rate||0.625;
+  let r=s[0]?.rate||0;
   for(const h of s){if(h.date<=ds)r=h.rate;else break;}
   return r;
 }
@@ -1051,9 +1052,10 @@ function coRate(cid,ds){
   if(!c)return 0;
   return c.type==='home'?homeRate(ds):(c.rate||0);
 }
-function fuelPrice(ds) {
+function fuelPrice(ds){
+  if(!fuelRates.length)return 0;
   const s=[...fuelRates].sort((a,b)=>a.date.localeCompare(b.date));
-  let p=s[0]?.price||stV("fuel");
+  let p=s[0]?.price||0;
   for(const h of s){if(h.date<=ds)p=h.price;else break;}
   return p;
 }
@@ -1157,7 +1159,7 @@ function lsClearAll(){
 }
 async function clearAll(){
   if(!await confirmAsync('למחוק את כל הנתונים המקומיים?'))return;
-  recs=[];expenses=[];cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];homeRates=[];fuelRates=[];st=Object.assign({},ST_DEF);
+  recs=[];expenses=[];cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true}];homeRates=[];fuelRates=[];st={};
   lsClearAll();
   // שמור timestamp גבוה כדי שה-reload לא יטען ענן על הנתונים הריקים
   localStorage.setItem('ev4_justCleared','1');
@@ -1165,7 +1167,7 @@ async function clearAll(){
 }
 async function clearAllCloud(){
   if(!await confirmAsync('למחוק את כל הנתונים — גם מקומית וגם מהענן?'))return;
-  recs=[];expenses=[];cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];homeRates=[];fuelRates=[];st=Object.assign({},ST_DEF);
+  recs=[];expenses=[];cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true}];homeRates=[];fuelRates=[];st={};
   lsClearAll();
   localStorage.setItem('ev4_justCleared','1');
   recalc();renderAll();renderExp();
@@ -1262,9 +1264,13 @@ function filterRecs(){
       co.toLowerCase().includes(q)||
       (r.note||'').toLowerCase().includes(q)||
       String(kw.toFixed(1)).includes(q)||
+      String(kw.toFixed(0)).includes(q)||
       String((r.cost||0).toFixed(2)).includes(q)||
+      String((r.cost||0).toFixed(0)).includes(q)||
       String(r.kmTotal||0).includes(q)||
-      String(r.kmLeft||0).includes(q)
+      String(r.kmLeft||0).includes(q)||
+      (r.kmDriven!=null&&String(Math.round(r.kmDriven)).includes(q))||
+      (r.rate&&String(r.rate.toFixed(3)).includes(q))
     );
   });
 }
@@ -3110,14 +3116,13 @@ function loadSt(){
   updateDeclared();
 }
 function updateDeclared(){
-  const batt=parseFloat($('sBatt').value)||stV('batt');
-  const range=parseFloat($('sRange').value)||stV('range');
-  const kpl=parseFloat($('sKpl').value)||stV('kpl');
-  const fuel=parseFloat($('sFuel').value)||stV('fuel');
-  const declKwh100=batt/range*100;
-  // כתוב ישירות לשדה המחושב
+  const batt=parseFloat($('sBatt').value)||stV('batt')||null;
+  const range=parseFloat($('sRange').value)||stV('range')||null;
+  const kpl=parseFloat($('sKpl').value)||stV('kpl')||null;
+  const fuel=parseFloat($('sFuel').value)||stV('fuel')||null;
+  const declKwh100=(batt&&range)?batt/range*100:null;
   if($('sDeclKwh100')){
-    $('sDeclKwh100').value=(batt&&range)?declKwh100.toFixed(2):'';
+    $('sDeclKwh100').value=declKwh100!=null?declKwh100.toFixed(2):'';
     if($('sDeclKwhCalc'))$('sDeclKwhCalc').textContent=(batt&&range)
       ?`${batt} ÷ ${range} × 100 = ${declKwh100.toFixed(2)} קו"ש/100ק"מ`
       :'= קיבולת סוללה ÷ טווח × 100';
@@ -3125,23 +3130,21 @@ function updateDeclared(){
   const declCalc=$('sDeclCalc');
   if(!declCalc)return;
   const decl=$('sDeclared');
+  // הצג רק אם יש לפחות טווח וקיבולת
+  if(!batt||!range){if(decl)decl.style.display='none';return;}
   if(decl)decl.style.display='block';
   const kmPerKwh=range/batt;
-  const declared1to100=kmPerKwh*(fuel/kpl)/(fuel/kpl/kpl); // simplified
-  // Correct: 1/100 declared = (km/kwh) * (fuelPrice/elecRate_current)
   const curElec=homeRate(today());
-  const d1to100=kmPerKwh*(fuel/kpl)/curElec; // wait no
-  // formula: (km/kwh)*(fuel_per_liter/elec_per_kwh)
-  // = (range/batt) * (fuel / curElec)  — but fuel here is price per liter
-  const d1to100correct=(range/batt)*(fuel/curElec);
+  const d1to100correct=(curElec>0&&fuel!=null)?(kmPerKwh*(fuel/curElec)):null;
+  const fmt=(v,d=2)=>v!=null&&isFinite(v)?v.toFixed(d):'—';
   declCalc.innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
       <div><div style="color:var(--tx3);font-size:.6rem">טווח</div><div style="font-weight:700;color:var(--ac)">${range} ק"מ</div></div>
       <div><div style="color:var(--tx3);font-size:.6rem">קיבולת</div><div style="font-weight:700;color:var(--ac)">${batt} קו"ש</div></div>
-      <div><div style="color:var(--tx3);font-size:.6rem">קו"ש/100ק"מ</div><div style="font-weight:700;color:var(--ac2)">${declKwh100.toFixed(2)}</div></div>
-      <div><div style="color:var(--tx3);font-size:.6rem">ק"מ/קו"ש</div><div style="font-weight:700;color:var(--ac2)">${kmPerKwh.toFixed(3)}</div></div>
-      <div><div style="color:var(--tx3);font-size:.6rem">1 ל-100 (מוצהר)</div><div style="font-weight:700;color:var(--ac3)">${d1to100correct.toFixed(2)}</div></div>
-      <div><div style="color:var(--tx3);font-size:.6rem">ק"מ לליטר</div><div style="font-weight:700">${kpl}</div></div>
+      <div><div style="color:var(--tx3);font-size:.6rem">קו"ש/100ק"מ</div><div style="font-weight:700;color:var(--ac2)">${fmt(declKwh100)}</div></div>
+      <div><div style="color:var(--tx3);font-size:.6rem">ק"מ/קו"ש</div><div style="font-weight:700;color:var(--ac2)">${fmt(kmPerKwh,3)}</div></div>
+      <div><div style="color:var(--tx3);font-size:.6rem">1 ל-100 (מוצהר)</div><div style="font-weight:700;color:var(--ac3)">${fmt(d1to100correct)}</div></div>
+      <div><div style="color:var(--tx3);font-size:.6rem">ק"מ לליטר</div><div style="font-weight:700">${kpl??'—'}</div></div>
     </div>`;
 }
 function setAvgFuel(){
@@ -3231,7 +3234,7 @@ function impJSONSel(e){
       if(doC&&d.cos){cos=d.cos;LS.set('ev4_cos',cos);}
       if(doRt&&d.homeRates){homeRates=d.homeRates;LS.set('ev4_hr',homeRates);}
       if(doRt&&d.fuelRates){fuelRates=d.fuelRates;LS.set('ev4_fuel',fuelRates);}
-      if(doS&&d.st){st=Object.assign({},ST_DEF,d.st);LS.set('ev4_st',st);}
+      if(doS&&d.st){st=Object.assign({},d.st);LS.set('ev4_st',st);}
       if(doExp&&d.expenses){expenses=d.expenses;saveExpLS();}
       LS.set('ev4_savedAt',Date.now());
       recalc();renderAll();toast('✅ ייבוא הושלם');
@@ -3259,15 +3262,19 @@ async function delSelected(cloud){
   const COS_DEF=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true},{id:'public',name:'ציבורי',type:'fixed',rate:1.20,isDefault:false}];
 
   if(doR){recs=[];clearKey('ev4_recs');clearKey('ev4_savedAt');}
-  if(doC){cos=[...COS_DEF];clearKey('ev4_cos');}
+  if(doC){
+    // השאר רק ביתי ברירת מחדל — תעריפו נלקח אוטומטית מהתעריפים
+    cos=[{id:'home',name:'ביתי',type:'home',rate:null,isDefault:true}];
+    clearKey('ev4_cos');
+  }
   if(doRt){
     homeRates=[];fuelRates=[];
-    clearKey('ev4_hr');clearKey('ev4_fuel');clearKey('ev4_hr_init');
-    // מנע אתחול מחדש מהנתונים המובנים
+    clearKey('ev4_hr');clearKey('ev4_fuel');
+    // סמן כ-init=true כדי ש-initMonthlyRates לא יאכלס מחדש
     localStorage.setItem('ev4_hr_init',JSON.stringify(true));
     if(LS._uid)localStorage.setItem(`u${LS._uid}_ev4_hr_init`,JSON.stringify(true));
   }
-  if(doS){st=Object.assign({},ST_DEF);clearKey('ev4_st');clearKey('ev4_bat');clearKey('ev4_eff');}
+  if(doS){st=Object.assign({},ST_EMPTY);clearKey('ev4_st');clearKey('ev4_bat');clearKey('ev4_eff');}
   if(doExp){expenses=[];clearKey('ev4_expenses');}
 
   recalc();renderAll();renderExp();
@@ -3618,19 +3625,7 @@ function syncThemeBtns(){
 // ══════════════════════════════════════════
 // EXPENSES (הוצאות)
 // ══════════════════════════════════════════
-let expenses=LS.get('ev4_expenses',[
-  {id:1,desc:'תשלום חודשי',amt:3000,cat:'תשלום חודשי',date:'2023-08-01',note:'תשלום קבוע'},
-  {id:2,desc:'אגרה',amt:229,cat:'אגרה',date:'2024-01-01',note:''},
-  {id:3,desc:'איתורן',amt:348.8,cat:'איתורן',date:'2024-01-01',note:'שנתי'},
-  {id:4,desc:'טיפולים',amt:6230,cat:'טיפול',date:'2024-06-01',note:''},
-  {id:5,desc:'ביטוח מקיף 2024',amt:6473.44,cat:'ביטוח',date:'2024-01-01',note:'מקיף'},
-  {id:6,desc:'ביטוח חובה 2024',amt:1486,cat:'ביטוח',date:'2024-01-01',note:'חובה'},
-  {id:7,desc:'צמיגים',amt:4000,cat:'צמיגים',date:'2024-03-01',note:''},
-  {id:8,desc:'שטיפה',amt:300,cat:'שטיפה',date:'2024-01-01',note:''},
-  {id:9,desc:'צמיג פרונט',amt:3200,cat:'צמיגים',date:'2025-01-01',note:''},
-  {id:10,desc:'ביטוח מקיף 2025',amt:8075,cat:'ביטוח',date:'2025-01-01',note:'מקיף'},
-  {id:11,desc:'ביטוח חובה 2025',amt:1630,cat:'ביטוח',date:'2025-01-01',note:'חובה'},
-]);
+let expenses=LS.get('ev4_expenses',[]);
 
 const EXP_ICONS={ביטוח:'🛡️',טיפול:'🔧',צמיגים:'🔄',אגרה:'📋',איתורן:'📍',שטיפה:'🚿','תשלום חודשי':'💳',אחר:'📦'};
 
@@ -4447,7 +4442,7 @@ async function gdLoadData(){
     if(Array.isArray(d.cos))cos=d.cos;
     if(Array.isArray(d.homeRates))homeRates=d.homeRates;
     if(Array.isArray(d.fuelRates))fuelRates=d.fuelRates;
-    if(d.st){st=Object.assign({},ST_DEF,d.st);LS.set('ev4_st',st);}
+    if(d.st){st=Object.assign({},d.st);LS.set('ev4_st',st);}
     if(Array.isArray(d.expenses)){expenses=d.expenses;LS.set('ev4_expenses',expenses);}
     if(d.carBattery)LS.set('ev4_bat',d.carBattery);
     if(d.carEff)LS.set('ev4_eff',d.carEff);
