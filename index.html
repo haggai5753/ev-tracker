@@ -381,7 +381,7 @@ body.light .kpi.kpi-clickable:hover{border-color:rgba(0,0,0,.18);}
       <div class="hdr-t">⚡ <span>עלות חשמל רכב</span></div>
       <div class="hdr-s" id="hSub">טוען...</div>
     </div>
-    <div id="gdStatusHdr" style="font-size:.72rem;color:var(--tx3);text-align:left;line-height:1.4;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid transparent;transition:border-color .15s;" onclick="window.innerWidth<900?openSettingsDrawer():sw('gd',null)" title="לחץ להגדרות חיבור"></div>
+    <div id="gdStatusHdr" onclick="window.innerWidth<900?openSettingsDrawer():sw('gd',null)" title="לחץ להגדרות חיבור" style="cursor:pointer;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:2px;min-width:80px;"></div>
   </div>
   <div class="tabs">
     <button class="tab active" onclick="sw('data',this)">📊 מבט כללי</button>
@@ -3272,8 +3272,7 @@ async function delSelected(cloud){
       toast('🗑️ נמחק מקומית ומהענן');setTimeout(()=>location.reload(),800);
     }catch{toast('🗑️ נמחק מקומית, שגיאה בענן','w');setTimeout(()=>location.reload(),800);}
   } else {
-    // מחיקה מקומית בלבד — שמור לענן את הנתונים החדשים (הריקים)
-    if(gdToken)gdAutoSave();
+    // מחיקה מקומית בלבד — reload יטען את הנתונים מהענן
     toast('🗑️ נמחק מקומית');setTimeout(()=>location.reload(),800);
   }
 }
@@ -4272,9 +4271,15 @@ function gdSetStatus(txt,color){
   const st=$('gdStatusTab');if(st){st.textContent=txt;st.style.color=color||'var(--tx3)';}
 }
 function gdSetHdrStatus(line1,line2){
-  // compact header indicator (mobile)
+  // compact header indicator
   const h=$('gdStatusHdr');if(!h)return;
-  h.innerHTML=line2?`${line1}<br><span style="color:var(--tx3);font-size:.65rem">${line2}</span>`:line1;
+  // קבע צבע לפי תוכן
+  let color='var(--tx3)';
+  if(line1.includes('✅'))color='var(--ac)';
+  else if(line1.includes('⚠️')||line1.includes('❌'))color='var(--er)';
+  else if(line1.includes('🔄')||line1.includes('💾'))color='var(--ac2)';
+  h.innerHTML=`<span style="font-size:.72rem;font-weight:700;color:${color};white-space:nowrap">${line1}</span>`
+    +(line2?`<span style="font-size:.62rem;color:var(--tx3);white-space:nowrap">${line2}</span>`:'');
 }
 function gdSetBtn(label,fn,color){
   const b=$('gdBtn');if(b){b.textContent=label;b.onclick=fn;b.style.background=color||'var(--ac2)';}
