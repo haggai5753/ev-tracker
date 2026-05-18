@@ -3525,6 +3525,14 @@ function openAddEntry(){
 function openSettingsDrawer(){
   $('settingsDrawer').classList.add('open');
   syncThemeBtns();
+  // סנכרן כפתור ענן לפי מצב נוכחי
+  if(gdToken){
+    gdSetBtn('התנתק',gdLogout,'var(--er)');
+    gdSetStatus(gdStatusText||'✅ מחובר','var(--ac)');
+  } else {
+    gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
+    gdSetStatus('☁️ לא מחובר','var(--tx3)');
+  }
 }
 function closeSettingsDrawer(){$('settingsDrawer').classList.remove('open');}
 
@@ -4193,6 +4201,7 @@ let gdDataFileId=null;
 let gdHtmlFileId=null;
 let gdSyncing=false;let gdDirty=false;
 let gdAutoSaveTimer=null;
+let gdStatusText='☁️ לא מחובר';
 
 function gdUserKey(k){return gdUserId?`ev4_${gdUserId}_${k}`:null;}
 function gdLoadUserIds(){
@@ -4203,6 +4212,7 @@ function gdLoadUserIds(){
 
 function gdShowBar(){}
 function gdSetStatus(txt,color){
+  gdStatusText=txt;
   // settings panel status
   const s=$('gdStatus');if(s){s.textContent=txt;s.style.color=color||'var(--tx3)';}
   // desktop sidebar status
@@ -4311,7 +4321,7 @@ async function gdSaveData(){
     }
     // שמירת HTML
     await gdSaveHTML();
-    const now=new Date().toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+    const now=new Date().toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     gdSetStatus(`✅ סונכרן ${now}`,'var(--ac)');gdSetHdrStatus('✅ מחובר',`סנכרון: ${now}`);
   } catch(e){
     const is401=e&&(e.status===401||String(e).includes('401'));
@@ -4394,12 +4404,12 @@ async function gdSync(){
       if(cloudTs>localTs){
         // ענן חדש יותר — טען ממנו
         const loaded=await gdLoadData();
-        if(loaded){toast('☁️ נתונים נטענו מהענן');gdSetStatus('✅ מסונכרן','var(--ac)');gdSetHdrStatus('✅ מחובר','נטען מהענן');gdSetBtn('התנתק',gdLogout,'var(--er)');}
+        if(loaded){toast('☁️ נתונים נטענו מהענן');{const _t=new Date().toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});gdSetStatus(`✅ סונכרן ${_t}`,'var(--ac)');gdSetHdrStatus('✅ מחובר',`נטען מהענן: ${_t}`);gdSetBtn('התנתק',gdLogout,'var(--er)');}}
         else gdSetStatus('⚠️ שגיאה בטעינה','var(--er)');
       } else {
         // מקומי חדש יותר (או שווה) — שמור לענן
         await gdSaveData();
-        gdSetStatus('✅ מסונכרן','var(--ac)');gdSetHdrStatus('✅ מחובר');gdSetBtn('התנתק',gdLogout,'var(--er)');
+        {const _t=new Date().toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});gdSetStatus(`✅ סונכרן ${_t}`,'var(--ac)');gdSetHdrStatus('✅ מחובר',`שמור: ${_t}`);gdSetBtn('התנתק',gdLogout,'var(--er)');}
       }
     } else {
       // אין קובץ ענן
