@@ -403,7 +403,7 @@ body.light .kpi.kpi-clickable:hover{border-color:rgba(0,0,0,.18);}
 .bat-wrap{display:flex;align-items:center;gap:6px;margin-top:6px;}
 .bat-body{flex:1;height:14px;background:var(--sf3);border-radius:3px;border:1.5px solid rgba(255,255,255,.12);position:relative;overflow:hidden;}
 body.light .bat-body{border-color:rgba(0,0,0,.12);}
-.bat-fill{position:absolute;left:0;top:0;bottom:0;border-radius:2px;transition:width .5s ease;}
+.bat-fill{position:absolute;right:0;top:0;bottom:0;border-radius:2px;transition:width .5s ease;}
 .bat-tip{width:4px;height:8px;background:rgba(255,255,255,.25);border-radius:0 2px 2px 0;flex-shrink:0;}
 body.light .bat-tip{background:rgba(0,0,0,.18);}
 .bat-pct{font-size:.65rem;font-weight:700;color:var(--tx2);flex-shrink:0;width:28px;text-align:right;}
@@ -720,6 +720,9 @@ body.light .bat-tip{background:rgba(0,0,0,.18);}
       <select id="expCatFilter" onchange="renderExpTable()" style="width:auto;flex-shrink:0;font-size:.8rem;padding:10px 10px">
         <option value="">כל הקטגוריות</option>
         <option value="ביטוח">🛡️ ביטוח</option>
+        <option value="ביטוח:מקיף">🛡️ ביטוח — מקיף</option>
+        <option value="ביטוח:חובה">🛡️ ביטוח — חובה</option>
+        <option value="ביטוח:צד ג׳">🛡️ ביטוח — צד ג׳</option>
         <option value="טיפול">🔧 טיפול</option>
         <option value="צמיגים">🔄 צמיגים</option>
         <option value="אגרה">📋 אגרה</option>
@@ -913,7 +916,7 @@ body.light .bat-tip{background:rgba(0,0,0,.18);}
       <div class="f"><label>עד תאריך</label><input type="date" id="expDateEnd"></div>
     </div>
     <div class="f"><label>קטגוריה</label>
-      <select id="expCat">
+      <select id="expCat" onchange="onExpCatChange()">
         <option value="ביטוח">🛡️ ביטוח</option>
         <option value="טיפול">🔧 טיפול</option>
         <option value="צמיגים">🔄 צמיגים</option>
@@ -922,6 +925,14 @@ body.light .bat-tip{background:rgba(0,0,0,.18);}
         <option value="שטיפה">🚿 שטיפה</option>
         <option value="תשלום חודשי">💳 תשלום חודשי</option>
         <option value="אחר">📦 אחר</option>
+      </select>
+    </div>
+    <div class="f" id="insTypeWrap" style="display:none"><label>סוג ביטוח</label>
+      <select id="expInsType">
+        <option value="מקיף">מקיף</option>
+        <option value="חובה">חובה</option>
+        <option value="צד ג׳">צד ג׳</option>
+        <option value="אחר">אחר — ציין בתיאור</option>
       </select>
     </div>
     <div class="f"><label>הערה</label><input type="text" id="expNote" placeholder="פרטים נוספים..."></div>
@@ -1802,7 +1813,8 @@ function renderMonthly(){
 
   function flatRow(label,d,ds,type,extraAttrs=''){
     const saved=d.fuelCost-d.cost;
-    const er=homeRate(ds),fkm=fuelPrice(ds)/(stV("kpl"));
+    const avgRate=d.kwh>0?(d.cost/d.kwh):0;
+    const fkm=fuelPrice(ds)/(stV("kpl"));
     let bg,lc,fw,fs,pl;
     if(type==='year') {bg='rgba(59,130,246,.13)';lc='var(--ac2)';fw=700;fs='.86rem';pl='12px';}
     else if(type==='month'){bg='rgba(42,53,71,.55)'; lc='var(--tx2)';fw=600;fs='.8rem'; pl='22px';}
@@ -1815,7 +1827,7 @@ function renderMonthly(){
       ${tdNum(d.km>0?fmtNum(d.km,0):'—','var(--ac)',fw,fs)}
       ${tdNum(d.fuelCost>0?fmtILS(d.fuelCost,0):'—','var(--er)',fw,fs)}
       ${tdNum(d.fuelCost>0?fmtILS(saved,0):'—',saved>=0?'var(--ok)':'var(--er)',700,fs)}
-      ${tdNum(er.toFixed(3),'var(--tx3)',400,'.74rem')}
+      ${tdNum(avgRate>0?avgRate.toFixed(3):'—','var(--tx3)',400,'.74rem')}
       ${tdNum(fkm.toFixed(4),'var(--tx3)',400,'.74rem')}
     </tr>`;
   }
@@ -2096,7 +2108,8 @@ function _syncKpiChart(){
     const vals=pts.map(p=>p.val);
     const minV=Math.min(...vals),maxV=Math.max(...vals);
     const minIdx=vals.indexOf(minV),maxIdx=vals.indexOf(maxV);
-    const trendPct=pts[0].val>0?((pts[n-1].val-pts[0].val)/pts[0].val*100):0;
+    const avgVal=vals.reduce((s,v)=>s+v,0)/vals.length;
+    const trendPct=avgVal>0?((pts[n-1].val-avgVal)/avgVal*100):0;
     const goodTrend=meta.invertedGood?trendPct<=0:trendPct>=0;
     const trendCol=goodTrend?'var(--ok)':'var(--er)';
     const trendDir=trendPct>=0?'▲':'▼';
@@ -2104,7 +2117,7 @@ function _syncKpiChart(){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
           <div style="font-size:.75rem;font-weight:700;color:var(--tx2)">${meta.label} — מגמה חודשית</div>
-          <div style="font-size:.67rem;color:${trendCol};font-weight:700;margin-top:2px">${trendDir} ${Math.abs(trendPct).toFixed(1)}% מהחודש הראשון</div>
+          <div style="font-size:.67rem;color:${trendCol};font-weight:700;margin-top:2px">${trendDir} ${Math.abs(trendPct).toFixed(1)}% מהממוצע</div>
         </div>
         <button class="kpi-chart-close" onclick="toggleKpiChart('${openKpiKey}')">✕ סגור</button>
       </div>
@@ -2574,15 +2587,29 @@ function renderDashboard(){
   }
 
   // ── helpers ──
-  function _arcSVG(pct,color,size){
+  function _arcSVG(pct,color,size,dotLabel){
     const r=size/2-4,cx=size/2,cy=size/2+4;
-    const a=Math.PI;const start={x:cx-r,y:cy};const end={x:cx+r,y:cy};
-    const angle=a*Math.min(1,Math.max(0,pct/100));
-    const ex=cx+r*Math.cos(Math.PI+angle);const ey=cy+r*Math.sin(Math.PI+angle);
+    const a=Math.PI;
+    // fill goes RIGHT→LEFT (like a fuel gauge draining)
+    const clampedPct=Math.min(1,Math.max(0,pct/100));
+    const angle=a*clampedPct;
+    // start = right end (cx+r), end sweeps counter-clockwise
+    // we draw the background full arc left→right, then overlay filled arc right→left
+    const bgStart={x:cx+r,y:cy},bgEnd={x:cx-r,y:cy};
+    // filled arc: from right (cx+r) counter-clockwise by angle
+    const ex=cx+r*Math.cos(-angle);const ey=cy+r*Math.sin(-angle);
     const lg=angle>Math.PI?1:0;
-    return `<svg width="${size}" height="${Math.round(size/2)+6}" viewBox="0 0 ${size} ${Math.round(size/2)+6}" style="display:block;overflow:visible">
-      <path d="M${start.x},${cy} A${r},${r} 0 0 1 ${end.x},${cy}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="5" stroke-linecap="round"/>
-      <path d="M${start.x},${cy} A${r},${r} 0 0 1 ${ex},${ey}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/>
+    // dot position on arc for benchmark marker
+    let dotHtml='';
+    if(dotLabel!=null){
+      // dot is always at filled arc tip
+      dotHtml=`<circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="4" fill="${color}" stroke="var(--bg)" stroke-width="1.5"/>`;
+    }
+    const trackColor='rgba(128,128,128,.18)';
+    return `<svg width="${size}" height="${Math.round(size/2)+8}" viewBox="0 0 ${size} ${Math.round(size/2)+8}" style="display:block;overflow:visible">
+      <path d="M${bgStart.x},${cy} A${r},${r} 0 0 0 ${bgEnd.x},${cy}" fill="none" stroke="${trackColor}" stroke-width="5" stroke-linecap="round"/>
+      <path d="M${bgStart.x},${cy} A${r},${r} 0 ${lg} 0 ${ex.toFixed(1)},${ey.toFixed(1)}" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round"/>
+      ${dotHtml}
       </svg>`;
   }
 
@@ -2696,7 +2723,8 @@ function renderDashboard(){
     // val is "liters equivalent per 100km". gauge fills out of 100.
     const pct=val!=null?Math.min(100,Math.max(0,val)):0;
     const col=val&&val<40?accentOk:val&&val<70?accentTeal:accentAmber;
-    const arc=_arcSVG(pct,col,80);
+    // high = bad = fill more (RTL), no inversion
+    const arc=_arcSVG(pct,col,80,true);
     s6=_kpiWrap('yellow','per100','',`
       <div class="kv-label">1 ל-100 שקילות</div>
       <div class="arc-wrap">
@@ -2704,7 +2732,7 @@ function renderDashboard(){
           ${arc}
           <div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:.95rem;font-weight:900;color:${col}">${val!=null?fmtNum(val,1):'—'}</div>
         </div>
-        <div style="display:flex;justify-content:space-between;width:80px;margin-top:1px">
+        <div style="display:flex;justify-content:space-between;width:80px;margin-top:1px;direction:ltr">
           <span style="font-size:.52rem;color:var(--tx3)">100</span>
           <span style="font-size:.52rem;color:var(--tx3)">0</span>
         </div>
@@ -2720,9 +2748,11 @@ function renderDashboard(){
     const diffPct=diff!=null?Math.round((diff/BENCH)*100):null;
     const rangeMin=BENCH?Math.max(5,BENCH-10):10;
     const rangeMax=BENCH?BENCH+12:30;
+    // pct: 0%=rangeMin(good/right), 100%=rangeMax(bad/left)
+    // arc fills RTL: high pct = more fill from right = more red/bad shown
     const pct=val!=null?Math.min(100,Math.max(0,((val-rangeMin)/(rangeMax-rangeMin))*100)):50;
     const col=diff==null?accentBlue:diff<-1?accentOk:diff<1?accentTeal:diff<4?accentAmber:accentRed;
-    const arc=_arcSVG(pct,col,80);
+    const arc=_arcSVG(pct,col,80,true);
     const diffLabel=diff==null?(BENCH?'':'אין נתון מוצהר'):diff<0?`${Math.abs(diffPct)}% טוב ממוצהר`:`${Math.abs(diffPct)}% מעל מוצהר`;
     const diffCol=diff==null?accentBlue:diff<=0?accentOk:accentRed;
     const benchLabel=BENCH?fmtNum(BENCH,1):'?';
@@ -2733,7 +2763,7 @@ function renderDashboard(){
           ${arc}
           <div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:.95rem;font-weight:900;color:${col}">${val!=null?fmtNum(val,1):'—'}</div>
         </div>
-        <div style="display:flex;justify-content:space-between;width:80px;margin-top:1px">
+        <div style="display:flex;justify-content:space-between;width:80px;margin-top:1px;direction:ltr">
           <span style="font-size:.52rem;color:var(--tx3)">${fmtNum(rangeMax,0)}</span>
           <span style="font-size:.52rem;color:var(--tx3);font-weight:700">⬥${benchLabel}</span>
           <span style="font-size:.52rem;color:var(--tx3)">${fmtNum(rangeMin,0)}</span>
@@ -4203,7 +4233,15 @@ function renderExpTable(){
   }
   // filter
   const filtered=expenses.filter(e=>{
-    if(catF&&e.cat!==catF)return false;
+    if(catF){
+      if(catF.includes(':')){
+        const [cat,insT]=catF.split(':');
+        const getType=ex=>ex.insType||(/חובה/.test(ex.desc||'')?'חובה':/מקיף/.test(ex.desc||'')?'מקיף':/צד ג/.test(ex.desc||'')?'צד ג׳':'אחר');
+        if(e.cat!==cat||getType(e)!==insT)return false;
+      } else {
+        if(e.cat!==catF)return false;
+      }
+    }
     if(!q)return true;
     return (e.desc||'').toLowerCase().includes(q)||(e.note||'').toLowerCase().includes(q)||(e.cat||'').toLowerCase().includes(q)||String(e.amt||'').includes(q);
   });
@@ -4405,29 +4443,22 @@ function renderExpSummary(){
       <div class="sc ec-blue ec-wide kpi-clickable" data-ekey="insTotal" onclick="toggleExpChart('insTotal')">${(()=>{
         const insAll=expenses.filter(e=>e.cat==='ביטוח');
         const insTotal=insAll.reduce((s,e)=>s+e.amt,0);
-        const insMandatory=insAll.filter(e=>/חובה/.test(e.desc||'')).reduce((s,e)=>s+e.amt,0);
-        const insComp=insAll.filter(e=>/מקיף/.test(e.desc||'')).reduce((s,e)=>s+e.amt,0);
-        const insOther=insTotal-insMandatory-insComp;
-        const maxV=Math.max(insMandatory,insComp,insOther,1);
+        // use insType field if exists, else fall back to text matching
+        const getType=e=>e.insType||(/חובה/.test(e.desc||'')?'חובה':/מקיף/.test(e.desc||'')?'מקיף':/צד ג/.test(e.desc||'')?'צד ג׳':'אחר');
+        const byType={};
+        for(const e of insAll){const t=getType(e);byType[t]=(byType[t]||0)+e.amt;}
+        const maxV=Math.max(...Object.values(byType),1);
+        // sort by amount descending (expensive first)
+        const typeOrder=Object.entries(byType).sort((a,b)=>b[1]-a[1]);
+        const TYPE_COLORS={'חובה':'#f87171','מקיף':'var(--ac2)','צד ג׳':'#f59e0b','אחר':'var(--tx3)'};
+        const rows=typeOrder.map(([t,v])=>`<div class="ec-split-row">
+              <span class="ec-split-lbl">${t}</span>
+              <div class="ec-split-bar"><div class="ec-split-fill" style="width:${Math.round((v/maxV)*100)}%;background:${TYPE_COLORS[t]||'var(--tx3)'}"></div></div>
+              <span class="ec-split-val" style="color:${TYPE_COLORS[t]||'var(--tx3)'}">${fmtILS(v,0)}</span>
+            </div>`).join('');
         return `<div class="ec-label">🛡️ סה"כ ביטוח</div>
           <div class="ec-value" style="color:var(--ac2)">${fmtILS(insTotal,0)}</div>
-          <div class="ec-split">
-            ${insMandatory>0?`<div class="ec-split-row">
-              <span class="ec-split-lbl">חובה</span>
-              <div class="ec-split-bar"><div class="ec-split-fill" style="width:${Math.round((insMandatory/maxV)*100)}%;background:#f87171"></div></div>
-              <span class="ec-split-val" style="color:#f87171">${fmtILS(insMandatory,0)}</span>
-            </div>`:''}
-            ${insComp>0?`<div class="ec-split-row">
-              <span class="ec-split-lbl">מקיף</span>
-              <div class="ec-split-bar"><div class="ec-split-fill" style="width:${Math.round((insComp/maxV)*100)}%;background:var(--ac2)"></div></div>
-              <span class="ec-split-val" style="color:var(--ac2)">${fmtILS(insComp,0)}</span>
-            </div>`:''}
-            ${insOther>0?`<div class="ec-split-row">
-              <span class="ec-split-lbl">אחר</span>
-              <div class="ec-split-bar"><div class="ec-split-fill" style="width:${Math.round((insOther/maxV)*100)}%;background:var(--tx3)"></div></div>
-              <span class="ec-split-val" style="color:var(--tx3)">${fmtILS(insOther,0)}</span>
-            </div>`:''}
-          </div>`;
+          <div class="ec-split">${rows}</div>`;
       })()}</div>
 
       ${(()=>{
@@ -4676,48 +4707,54 @@ function _buildExpTreeChart(key){
 
   // ביטוח — שנים עם חלוקה חובה/מקיף/אחר
   if(key==='insTotal'){
+    const getType=e=>e.insType||(/חובה/.test(e.desc||'')?'חובה':/מקיף/.test(e.desc||'')?'מקיף':/צד ג/.test(e.desc||'')?'צד ג׳':'אחר');
+    const TYPE_COLORS={'חובה':'#f87171','מקיף':'var(--ac2)','צד ג׳':'#f59e0b','אחר':'var(--tx3)'};
     const byY={};
     for(const e of expenses.filter(x=>x.cat==='ביטוח')){
       const y=e.date.slice(0,4);
-      if(!byY[y])byY[y]={mandatory:0,comp:0,other:0,total:0};
+      if(!byY[y])byY[y]={total:0,types:{}};
       byY[y].total+=e.amt;
-      if(/חובה/.test(e.desc||''))byY[y].mandatory+=e.amt;
-      else if(/מקיף/.test(e.desc||''))byY[y].comp+=e.amt;
-      else byY[y].other+=e.amt;
+      const t=getType(e);
+      byY[y].types[t]=(byY[y].types[t]||0)+e.amt;
     }
-    const years=Object.keys(byY).sort();
+    const years=Object.keys(byY).sort().reverse();
     const el=document.getElementById('expTree_'+key);if(!el)return;
     const tot=years.reduce((s,y)=>s+byY[y].total,0);
-    // build a grouped HTML display per year
     const maxV=Math.max(...years.map(y=>byY[y].total),1);
-    const rows=years.reverse().map(y=>{
+    if(!window._insYearOpen)window._insYearOpen={};
+
+    // ── COLUMNS (עמודות) per year + expandable detail ──
+    const colsHtml=years.map(y=>{
       const d=byY[y];
-      const pctM=Math.round((d.mandatory/maxV)*100);
-      const pctC=Math.round((d.comp/maxV)*100);
-      const pctO=Math.round((d.other/maxV)*100);
-      return `<div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-          <span style="font-size:.72rem;font-weight:700;color:var(--tx)">${y}</span>
-          <span style="font-size:.72rem;font-weight:700;color:#a78bfa">${fmtILS(d.total,0)}</span>
+      const barH=Math.round((d.total/maxV)*80); // max 80px tall
+      const isOpen=!!window._insYearOpen[y];
+      const typeEntries=Object.entries(d.types).sort((a,b)=>b[1]-a[1]);
+      // stacked bar segments
+      const segs=typeEntries.map(([t,v])=>`
+        <div style="width:100%;height:${Math.round((v/d.total)*barH)}px;background:${TYPE_COLORS[t]||'var(--tx3)'}"></div>`).join('');
+      const detail=isOpen?`<div style="margin-top:6px;padding:6px 8px;background:rgba(0,0,0,.22);border-radius:6px;width:100%;box-sizing:border-box">
+        ${typeEntries.map(([t,v])=>`<div style="display:flex;justify-content:space-between;gap:6px;margin-bottom:2px">
+          <span style="font-size:.6rem;color:${TYPE_COLORS[t]||'var(--tx3)'};font-weight:600;white-space:nowrap">${t}</span>
+          <span style="font-size:.6rem;font-weight:700;color:${TYPE_COLORS[t]||'var(--tx3)'};white-space:nowrap">${fmtILS(v,0)}</span>
+        </div>`).join('')}
+      </div>`:'';
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;min-width:52px"
+               onclick="(()=>{window._insYearOpen['${y}']=!window._insYearOpen['${y}'];_buildExpTreeChart('insTotal');})()">
+        <div style="display:flex;flex-direction:column-reverse;align-items:stretch;width:32px;height:80px;justify-content:flex-start;overflow:hidden;border-radius:4px 4px 0 0">
+          ${segs}
         </div>
-        ${d.mandatory>0?`<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
-          <span style="font-size:.6rem;color:var(--tx3);width:36px;text-align:right;flex-shrink:0">חובה</span>
-          <div style="flex:1;height:6px;background:var(--sf3);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pctM}%;background:#f87171;border-radius:3px"></div></div>
-          <span style="font-size:.6rem;font-weight:700;color:#f87171;width:52px;text-align:left">${fmtILS(d.mandatory,0)}</span>
-        </div>`:''}
-        ${d.comp>0?`<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
-          <span style="font-size:.6rem;color:var(--tx3);width:36px;text-align:right;flex-shrink:0">מקיף</span>
-          <div style="flex:1;height:6px;background:var(--sf3);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pctC}%;background:var(--ac2);border-radius:3px"></div></div>
-          <span style="font-size:.6rem;font-weight:700;color:var(--ac2);width:52px;text-align:left">${fmtILS(d.comp,0)}</span>
-        </div>`:''}
-        ${d.other>0?`<div style="display:flex;align-items:center;gap:5px">
-          <span style="font-size:.6rem;color:var(--tx3);width:36px;text-align:right;flex-shrink:0">אחר</span>
-          <div style="flex:1;height:6px;background:var(--sf3);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pctO}%;background:var(--tx3);border-radius:3px"></div></div>
-          <span style="font-size:.6rem;font-weight:700;color:var(--tx3);width:52px;text-align:left">${fmtILS(d.other,0)}</span>
-        </div>`:''}
+        <div style="font-size:.68rem;font-weight:700;color:var(--tx)">${y}</div>
+        <div style="font-size:.6rem;color:#a78bfa;font-weight:700">${fmtILS(d.total,0)}</div>
+        <div style="font-size:.55rem;color:var(--tx3);line-height:1">${isOpen?'▾':'▸'}</div>
+        ${detail}
       </div>`;
     }).join('');
-    el.innerHTML=`<div style="font-size:.72rem;font-weight:700;color:var(--tx2);margin-bottom:10px">${meta.label} — לפי שנה — סה"כ: ${fmtILS(tot,0)}</div>${rows}`;
+
+    el.innerHTML=`<div style="font-size:.72rem;font-weight:700;color:var(--tx2);margin-bottom:10px">${meta.label} — לפי שנה — סה"כ: ${fmtILS(tot,0)}</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;overflow-x:auto;padding-bottom:8px">${colsHtml}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+      ${Object.entries(TYPE_COLORS).map(([t,c])=>`<span style="font-size:.65rem;color:${c}">■ ${t}</span>`).join('')}
+    </div>`;
     return;
   }
 
@@ -4851,7 +4888,8 @@ function _syncExpChart(){
     const vals=pts.map(p=>p.val);
     const minV=Math.min(...vals),maxV=Math.max(...vals);
     const minIdx=vals.indexOf(minV),maxIdx=vals.indexOf(maxV);
-    const trendPct=pts[0].val>0?((pts[n-1].val-pts[0].val)/pts[0].val*100):0;
+    const avgVal=vals.reduce((s,v)=>s+v,0)/vals.length;
+    const trendPct=avgVal>0?((pts[n-1].val-avgVal)/avgVal*100):0;
     const goodTrend=meta.invertedGood?trendPct<=0:trendPct>=0;
     const trendCol=goodTrend?'var(--ok)':'var(--er)';
     const trendDir=trendPct>=0?'▲':'▼';
@@ -4859,7 +4897,7 @@ function _syncExpChart(){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
           <div style="font-size:.75rem;font-weight:700;color:var(--tx2)">${meta.label} — מגמה חודשית</div>
-          <div style="font-size:.67rem;color:${trendCol};font-weight:700;margin-top:2px">${trendDir} ${Math.abs(trendPct).toFixed(1)}% מהחודש הראשון</div>
+          <div style="font-size:.67rem;color:${trendCol};font-weight:700;margin-top:2px">${trendDir} ${Math.abs(trendPct).toFixed(1)}% מהממוצע</div>
         </div>
         <button class="kpi-chart-close" onclick="toggleExpChart('${_openExpKey}')">✕ סגור</button>
       </div>
@@ -4998,12 +5036,19 @@ function expInstChanged(){
     $('expDateEnd').value=base.toISOString().slice(0,10);
   }
 }
+function onExpCatChange(){
+  const cat=$('expCat')?.value;
+  const wrap=$('insTypeWrap');
+  if(wrap)wrap.style.display=(cat==='ביטוח')?'block':'none';
+}
 function openAddExp(){
   $('mExpT').textContent='הוסף הוצאה';
   $('expEditId').value='';
   $('expDesc').value='';$('expAmt').value='';$('expNote').value='';
   $('expDate').value=today();$('expCat').value='אחר';
   $('expInst').value='1';$('expDateEnd').value=today();
+  if($('expInsType'))$('expInsType').value='מקיף';
+  onExpCatChange();
   openModal('mExp');
 }
 function editExp(id){
@@ -5013,6 +5058,8 @@ function editExp(id){
   $('expDesc').value=e.desc;$('expAmt').value=e.amt;
   $('expNote').value=e.note||'';$('expDate').value=e.date;$('expCat').value=e.cat;
   $('expInst').value=e.inst||1;$('expDateEnd').value=e.dateEnd||e.date;
+  if($('expInsType'))$('expInsType').value=e.insType||'מקיף';
+  onExpCatChange();
   openModal('mExp');
 }
 function saveExp(){
@@ -5020,9 +5067,12 @@ function saveExp(){
   if(!desc||isNaN(amt)||amt<0){toast('⚠️ נא למלא תיאור וסכום','e');return;}
   const id=parseInt($('expEditId').value)||0;
   const inst=Math.max(1,parseInt($('expInst').value)||1);
+  const cat=$('expCat').value;
   const dateStart=$('expDate').value;
   const dateEnd=$('expDateEnd').value||dateStart;
-  const obj={id:id||Date.now(),desc,amt,cat:$('expCat').value,date:dateStart,dateEnd,inst,note:$('expNote').value.trim()};
+  const insType=(cat==='ביטוח'&&$('expInsType'))?$('expInsType').value:undefined;
+  const obj={id:id||Date.now(),desc,amt,cat,date:dateStart,dateEnd,inst,note:$('expNote').value.trim()};
+  if(insType)obj.insType=insType;
   if(id){const idx=expenses.findIndex(x=>x.id===id);if(idx>=0)expenses[idx]=obj;else expenses.push(obj);}
   else expenses.push(obj);
   saveExpLS();closeModal('mExp');renderExp();toast('✅ נשמר');
