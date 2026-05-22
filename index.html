@@ -1210,21 +1210,21 @@ function fuelPrice(ds){
 // RATE FIELD UX
 // ══════════════════════════════════════════
 function updateRatePlaceholder(){
-  const def=coRate(selCo,today());
+  const def=lastCoRate(selCo);
   const ri=$('inRate');
   if(ri&&!ri.value) ri.placeholder=def.toFixed(3);
   const ac=$('inAddCo');
-  if(ac){const def2=coRate(ac.value,today());const ri2=$('inRate2');if(ri2&&!ri2.value)ri2.placeholder=def2.toFixed(3);}
+  if(ac){const def2=lastCoRate(ac.value);const ri2=$('inRate2');if(ri2&&!ri2.value)ri2.placeholder=def2.toFixed(3);}
 }
 function onRateInput(v){
   const tag=$('rateTag');
   if(v&&parseFloat(v)>0){tag.className='rate-manual';tag.textContent='מחיר ידני ✎';}
-  else{tag.className='rate-auto';tag.textContent='ברירת מחדל מהחברה';$('inRate').placeholder=coRate(selCo,today()).toFixed(3);}
+  else{tag.className='rate-auto';tag.textContent='ברירת מחדל מהחברה';$('inRate').placeholder=lastCoRate(selCo).toFixed(3);}
 }
 function onRateInput2(v){
   const tag=$('rateTag2');
   if(v&&parseFloat(v)>0){tag.className='rate-manual';tag.textContent='מחיר ידני ✎';}
-  else{tag.className='rate-auto';tag.textContent='ברירת מחדל';const ac=$('inAddCo');$('inRate2').placeholder=coRate(ac?.value||'home',today()).toFixed(3);}
+  else{tag.className='rate-auto';tag.textContent='ברירת מחדל';const ac=$('inAddCo');$('inRate2').placeholder=lastCoRate(ac?.value||'home').toFixed(3);}
 }
 
 // תעריף דינמי לפי שעה — הגדרות ניתנות לעריכה
@@ -1399,7 +1399,7 @@ function saveRec(){
   }
   if(recs.length>0&&ds<recs[recs.length-1].date){toast('⚠️ התאריך מוקדם מהרשומה האחרונה','e');return;}
   const manR=parseFloat($('inRate').value);
-  const baseR=coRate(selCo,ds);
+  const baseR=lastCoRate(selCo);
   const timeStr=$('inChargeTime')?.value||'';
   const dynamicR=timeStr?dynamicRate(baseR,timeStr,ds).rate:baseR;
   const r1=(!isNaN(manR)&&manR>0)?manR:dynamicR;
@@ -1407,11 +1407,16 @@ function saveRec(){
   const kwa=hasA?(parseFloat($('inAddKwh').value)||0):0;
   const addCid=hasA?$('inAddCo').value:null;
   const manR2=hasA?parseFloat($('inRate2').value):NaN;
-  const r2=(kwa>0&&addCid&&!isNaN(manR2)&&manR2>0)?manR2:(kwa>0&&addCid?coRate(addCid,ds):0);
+  const r2=(kwa>0&&addCid&&!isNaN(manR2)&&manR2>0)?manR2:(kwa>0&&addCid?lastCoRate(addCid):0);
   const kmD=recs.length>0?kt-recs[recs.length-1].kmTotal:null;
   const kwhC=(recs.length>0?recs[recs.length-1].kwhCumul:0)+kw+kwa;
   const cost=kw*r1+kwa*r2;
   recs.push({id:Date.now(),date:ds,kmLeft:kl,kmTotal:kt,kmDriven:kmD,kwh:kw,kwhAdd:kwa,kwhCumul:kwhC,companyId:selCo,addCoId:addCid,rate:r1,rateAdd:r2,cost,note,companyName:cos.find(c=>c.id===selCo)?.name||selCo});
+  // אם הוזן תעריף ידני — עדכן אותו כתעריף החברה
+  if(!isNaN(manR)&&manR>0){
+    const ci=cos.findIndex(c=>c.id===selCo);
+    if(ci>=0&&cos[ci].type!=='home'){cos[ci].rate=manR;LS.set('ev4_cos',cos);}
+  }
   LS.set('ev4_recs',recs);
   ['inKmLeft','inKmTotal','inKwh','inNote','inAddKwh','inRate','inRate2','inChargeTime'].forEach(id=>{const el=$(id);if(el){el.value='';if(el.dataset&&el.dataset.wasAuto)delete el.dataset.wasAuto;}});
   const _cht=$('inChargeTimeHint');if(_cht)_cht.textContent='';
