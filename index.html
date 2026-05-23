@@ -2907,7 +2907,7 @@ function renderDashboard(){
   // נוסחא מקורית מדויקת — זהה ל-renderMini המקורי
   const curFuelMini=curFuel;
   const avgElecMini=tkw>0?tco/tkw:homeRate(today());
-  const per100fuel=tkm>0&&tkw>0?(1/(tkw/tkm))*(curFuelMini/avgElecMini):null;
+  const per100fuel=tkm>0&&tkw>0&&avgElecMini>0?(1/(tkw/tkm))*(curFuelMini/avgElecMini):null;
 
   let s1,s2,s3,s4,s5,s6,s7,s8,s9,s10;
   // ─── KPI cards ───
@@ -2961,7 +2961,7 @@ function renderDashboard(){
       <div class="kv-label">חיסכון מצטבר מדלק</div>
       <div class="sv-body">
         <div style="flex:1">
-          <div class="kv-value kv-${saved>=0?'ok':'red'}" style="font-size:1.6rem">${fuelTotal>0?fmtILS(saved,0):'—'}</div>
+          <div class="kv-value kv-${saved>=0?'ok':'red'}" style="font-size:1.6rem">${fuelTotal>0?fmtILS(saved,0):'₪0'}</div>
           <div class="kv-sub">לעומת רכב דלק שקילה</div>
         </div>
         <div class="sv-coins">${coinHtml}</div>
@@ -2999,12 +2999,12 @@ function renderDashboard(){
         <div class="cmp-item">
           <div class="cmp-lbl">⚡ חשמל</div>
           <div class="cmp-bar-track"><div class="cmp-bar-fill" style="width:${ep}%;background:${accentTeal}"></div></div>
-          <div class="cmp-val" style="color:${accentTeal}">${ckm>0?fmtILS(ckm,3):'—'}</div>
+          <div class="cmp-val" style="color:${accentTeal}">${fmtILS(ckm,3)}</div>
         </div>
         <div class="cmp-item">
           <div class="cmp-lbl">⛽ דלק</div>
           <div class="cmp-bar-track"><div class="cmp-bar-fill" style="width:${fp}%;background:${accentAmber}"></div></div>
-          <div class="cmp-val" style="color:${accentAmber}">${fuelVal>0?fmtILS(fuelVal,3):'—'}</div>
+          <div class="cmp-val" style="color:${accentAmber}">${fmtILS(fuelVal,3)}</div>
         </div>
       </div>`);
   })();
@@ -3062,7 +3062,7 @@ function renderDashboard(){
       <div class="arc-wrap">
         <div style="position:relative;width:80px">
           ${arc}
-          <div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:.95rem;font-weight:900;color:${col}">${val!=null?fmtNum(val,1):'—'}</div>
+          <div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:.95rem;font-weight:900;color:${col}">${val!=null?fmtNum(val,1):'0'}</div>
         </div>
         <div style="display:flex;justify-content:space-between;width:80px;margin-top:1px;direction:ltr">
           <span style="font-size:.52rem;color:var(--tx3)">100</span>
@@ -3093,7 +3093,7 @@ function renderDashboard(){
       <div class="arc-wrap">
         <div style="position:relative;width:80px">
           ${arc}
-          <div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:.95rem;font-weight:900;color:${col}">${val!=null?fmtNum(val,1):'—'}</div>
+          <div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:.95rem;font-weight:900;color:${col}">${val!=null?fmtNum(val,1):'0'}</div>
         </div>
         <div style="display:flex;justify-content:space-between;width:80px;margin-top:1px;direction:ltr">
           <span style="font-size:.52rem;color:var(--tx3)">${fmtNum(rangeMax,0)}</span>
@@ -3111,7 +3111,7 @@ function renderDashboard(){
     const fillW=pct!=null?pct:0;
     s8=_kpiWrap('green','range','',`
       <div class="kv-label">טווח מחושב</div>
-      <div class="kv-value kv-green">${avgRange>0?Math.round(avgRange)+' ק"מ':'—'}</div>
+      <div class="kv-value kv-green">${avgRange>0?Math.round(avgRange)+' ק"מ':'0 ק"מ'}</div>
       <div class="bat-wrap">
         <div class="bat-body">
           <div class="bat-fill" style="width:${fillW}%;background:${col}"></div>
@@ -3140,7 +3140,7 @@ function renderDashboard(){
       <div class="kv-label">תעריף ממוצע</div>
       <div class="bolt-wrap">
         <div>
-          <div class="kv-value kv-green">${avgRate>0?avgRate.toFixed(3)+' ₪':'—'}</div>
+          <div class="kv-value kv-green">${avgRate>0?avgRate.toFixed(3)+' ₪':'0.000 ₪'}</div>
           <div class="kv-sub">₪ לקו"ש</div>
         </div>
         <div class="bolt-bars" style="margin-right:auto;padding-right:4px;direction:ltr">${ticksHtml}</div>
@@ -3179,9 +3179,9 @@ function renderDashboard(){
     <div class="info-strip">
       <div class="is-item"><div class="is-lbl">תעריף ביתי</div><div class="is-val">${curElec.toFixed(3)} ₪</div></div>
       <div class="is-item"><div class="is-lbl">דלק עכשיו</div><div class="is-val">${fmtILS(curFuel,2)}</div></div>
-      <div class="is-item"><div class="is-lbl">טעינות מלאות</div><div class="is-val">${(tkw/chargeCap).toFixed(1)}</div></div>
-      <div class="is-item"><div class="is-lbl">ממוצע קו"ש/טעינה</div><div class="is-val">${(tkw/recs.length).toFixed(1)}</div></div>
-      <div class="is-item"><div class="is-lbl">ממוצע ₪/טעינה</div><div class="is-val">${fmtILS(tco/recs.length,2)}</div></div>
+      <div class="is-item"><div class="is-lbl">טעינות מלאות</div><div class="is-val">${chargeCap>0?(tkw/chargeCap).toFixed(1):'0.0'}</div></div>
+      <div class="is-item"><div class="is-lbl">ממוצע קו"ש/טעינה</div><div class="is-val">${recs.length>0?(tkw/recs.length).toFixed(1):'0.0'}</div></div>
+      <div class="is-item"><div class="is-lbl">ממוצע ₪/טעינה</div><div class="is-val">${recs.length>0?fmtILS(tco/recs.length,2):'₪0.00'}</div></div>
     </div>`;
 }
 
@@ -3435,12 +3435,10 @@ function _trendVal(kwh,km){
 }
 
 function _trendAvg(recs_list){
-  const batKwh=st.chargeKwh||80;
-  const range=st.range||485;
-  const kwh=recs_list.reduce((s,r)=>s+(r.kwh||0),0);
+  const cost=recs_list.reduce((s,r)=>s+(r.cost||0),0);
   const km=recs_list.filter(r=>r.kmDriven>0).reduce((s,r)=>s+r.kmDriven,0);
-  if(!kwh||!km)return null;
-  return ((kwh/batKwh)/(km/range)-1)*100;
+  if(!km)return null;
+  return cost/km;
 }
 
 function drawTrendChart(){
@@ -3468,7 +3466,7 @@ function drawTrendChart(){
       labels.push(y);vals.push(_trendAvg(byY[y]));
     }
     const allAvg=_trendAvg(recs);
-    title=`מגמת הוצאה — לפי שנה — ממוצע: ${allAvg!=null?allAvg.toFixed(1)+'%':'—'}`;canDrill=true;
+    title=`מגמת הוצאה — לפי שנה — ממוצע: ${allAvg!=null?fmtILS(allAvg,4)+'/ק"מ':'—'}`;canDrill=true;
   } else if(level==='months'){
     const y=_trendLevel.key;backLevel='years';
     const byM={};
@@ -3486,7 +3484,7 @@ function drawTrendChart(){
       const [,mo]=ym.split('-');
       labels.push(mo+'/'+y.slice(2));vals.push(_trendAvg(byM[ym]));
     }
-    title=`${y} — לפי חודש — ממוצע: ${yearAvg!=null?yearAvg.toFixed(1)+'%':'—'}`;canDrill=true;
+    title=`${y} — לפי חודש — ממוצע: ${yearAvg!=null?fmtILS(yearAvg,4)+'/ק"מ':'—'}`;canDrill=true;
   } else if(level==='days'){
     const ym=_trendLevel.key;const [y,mo]=ym.split('-');
     backLevel='months';
@@ -3502,14 +3500,14 @@ function drawTrendChart(){
     for(const d of days){
       labels.push(d.slice(8));vals.push(_trendAvg(byD[d]));
     }
-    title=`${mo}/${y} — לפי יום — ממוצע: ${monthAvg!=null?monthAvg.toFixed(1)+'%':'—'}`;
+    title=`${mo}/${y} — לפי יום — ממוצע: ${monthAvg!=null?fmtILS(monthAvg,4)+'/ק"מ':'—'}`;
   }
 
   if(!labels.length){el.style.display='none';return;}
 
   const backBtn=backLevel?`<button onclick="_trendUp('${backLevel}')" style="background:var(--sf2);border:1px solid var(--bd);border-radius:var(--rs);color:var(--tx2);font-family:var(--fn);font-size:.72rem;padding:4px 10px;cursor:pointer">◀ חזרה</button>`:'';
   const hint=canDrill?'<div style="font-size:.6rem;color:var(--tx3);text-align:center;margin-top:3px">לחץ על עמוד לפירוט</div>':'';
-  el.innerHTML=`<div class="ct"><div class="ctb" style="background:var(--ac3)"></div>מגמת הוצאה — עלות לק"מ לפי שנה</div>
+  el.innerHTML=`<div class="ct"><div class="ctb" style="background:var(--ac3)"></div>מגמת הוצאה — עלות לק"מ לפי שנה <button class="tip-btn" onclick="showTip(event,'עלות לק\"מ = סה\"כ עלות חשמל לתקופה ÷ סה\"כ ק\"מ שנסעו בתקופה. ירידה = עלות ק\"מ זולה יותר.')">?</button></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <div style="font-size:.72rem;font-weight:700;color:var(--tx2)">${title}</div>
       ${backBtn}
@@ -3544,7 +3542,7 @@ function _drawTrendBars(labels,vals,canDrill){
   vals.forEach((v,i)=>{
     if(v==null||!isFinite(v))return;
     const x=PAD.l+spacing*i+(spacing-bw)/2;
-    const col=v>=0?'#ef4444':'#00c896';
+    const col='#f59e0b';
     const barH=Math.max(2,Math.abs(v)/range*ch);
     const y=v>=0?zeroY-barH:zeroY;
     const grad=ctx.createLinearGradient(0,y,0,y+barH);
@@ -3554,7 +3552,7 @@ function _drawTrendBars(labels,vals,canDrill){
     else ctx.fillRect(x,y,bw,barH);
     if(barH>14){
       ctx.fillStyle=chartBarLabelColor();ctx.font='bold 7.5px Heebo,sans-serif';ctx.textAlign='center';
-      ctx.fillText((v>=0?'+':'')+v.toFixed(1)+'%',x+bw/2,v>=0?y+11:y+barH-4);
+      ctx.fillText('₪'+v.toFixed(2),x+bw/2,v>=0?y+11:y+barH-4);
     }
     ctx.fillStyle=chartLabelColor();ctx.font='9px Heebo,sans-serif';ctx.textAlign='center';
     ctx.fillText(labels[i],x+bw/2,H-4);
@@ -3563,7 +3561,7 @@ function _drawTrendBars(labels,vals,canDrill){
   ctx.fillStyle=chartLabelColor();ctx.font='9px Heebo,sans-serif';ctx.textAlign='right';
   for(let i=0;i<=3;i++){
     const v=negMin+(range/3)*i;
-    ctx.fillText((v>=0?'+':'')+v.toFixed(1)+'%',PAD.l-3,PAD.t+ch-(ch/3)*i+4);
+    ctx.fillText('₪'+v.toFixed(2),PAD.l-3,PAD.t+ch-(ch/3)*i+4);
   }
 
   if(canDrill){
@@ -5596,8 +5594,18 @@ function _doGdLogin(){
         gdSetStatus('✅ מחובר','var(--ac)');
         gdSetHdrStatus('✅ מחובר');
         gdSetBtn('התנתק',gdLogout,'var(--er)');
-        // התחברות חדשה — תמיד טען מהענן (ענן מנצח מקומי)
-        gdSync();
+        // התחברות חדשה — בדוק אם יש נתונים מקומיים לפני סנכרון
+        const _localRecsOnLogin=LS.get('ev4_recs',[]);
+        if(_localRecsOnLogin.length>0){
+          if(confirm('נמצאו נתונים מקומיים.\nאישור = טען מהענן (ידרוס נתונים מקומיים).\nביטול = גבה נתונים מקומיים לענן.')){
+            gdSync();
+          } else {
+            gdSaveData();
+            toast('☁️ נתונים מקומיים גובו לענן');
+          }
+        } else {
+          gdSync();
+        }
       }
     });
     client.requestAccessToken();
@@ -5655,7 +5663,7 @@ async function gdSaveData(){
     }
     // שמירת HTML
     await gdSaveHTML();
-    const now=new Date().toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const now=new Date().toLocaleString('he-IL',{year:'2-digit',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     gdSetStatus(`✅ סונכרן ${now}`,'var(--ac)');gdSetHdrStatus('✅ מחובר',`סנכרון: ${now}`);
   } catch(e){
     const is401=e&&(e.status===401||String(e).includes('401'));
@@ -5738,12 +5746,12 @@ async function gdSync(){
       if(cloudTs>localTs){
         // ענן חדש יותר — טען ממנו
         const loaded=await gdLoadData();
-        if(loaded){toast('☁️ נתונים נטענו מהענן');{const _t=new Date().toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});gdSetStatus(`✅ סונכרן ${_t}`,'var(--ac)');gdSetHdrStatus('✅ מחובר',`נטען מהענן: ${_t}`);gdSetBtn('התנתק',gdLogout,'var(--er)');}}
+        if(loaded){toast('☁️ נתונים נטענו מהענן');{const _t=new Date().toLocaleString('he-IL',{year:'2-digit',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});gdSetStatus(`✅ סונכרן ${_t}`,'var(--ac)');gdSetHdrStatus('✅ מחובר',`נטען מהענן: ${_t}`);gdSetBtn('התנתק',gdLogout,'var(--er)');}}
         else gdSetStatus('⚠️ שגיאה בטעינה','var(--er)');
       } else {
         // מקומי חדש יותר (או שווה) — שמור לענן
         await gdSaveData();
-        {const _t=new Date().toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});gdSetStatus(`✅ סונכרן ${_t}`,'var(--ac)');gdSetHdrStatus('✅ מחובר',`שמור: ${_t}`);gdSetBtn('התנתק',gdLogout,'var(--er)');}
+        {const _t=new Date().toLocaleString('he-IL',{year:'2-digit',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});gdSetStatus(`✅ סונכרן ${_t}`,'var(--ac)');gdSetHdrStatus('✅ מחובר',`שמור: ${_t}`);gdSetBtn('התנתק',gdLogout,'var(--er)');}
       }
     } else {
       // אין קובץ ענן
