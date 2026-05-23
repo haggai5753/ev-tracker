@@ -5607,8 +5607,8 @@ function _doGdLogin(){
           $('confirmYes').textContent='טען מענן';
           $('confirmNo').textContent='גבה מקומי';
           $('confirmYes').style.background='var(--ac2)';
-          const _doCloud=await confirmAsync('נמצאו נתונים מקומיים.\nמה לעשות?\n\n✅ טען מענן — ידרוס נתונים מקומיים\n📦 גבה מקומי — שמור נתונים מקומיים לענן');
-          // שחזר כפתורים
+const _doCloud=await confirmAsync('נמצאו נתונים מקומיים. מה לעשות❓\n\n✅ טען מענן — ידרוס נתונים מקומיים.\n📦 גבה מקומי — שמור נתונים מקומיים לענן.');
+// שחזר כפתורים
           $('confirmYes').textContent='אישור';
           $('confirmNo').textContent='ביטול';
           $('confirmYes').style.background='var(--er)';
