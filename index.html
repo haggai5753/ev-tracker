@@ -5546,6 +5546,7 @@ const GD_DATA_FILE='ev_data.json';
 const GD_HTML_FILE='עלות_חשמל_רכב.html';
 
 let gdToken=null;
+let gdTokenExpiry=0;
 let gdUserId=null;
 let gdDataFileId=null;
 let gdHtmlFileId=null;
@@ -5629,7 +5630,9 @@ function _doGdLogin(){
       callback:async(resp)=>{
         if(resp.error){gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');gdSetStatus('❌ שגיאת התחברות','var(--er)');return;}
         gdToken=resp.access_token;
+        gdTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
         localStorage.setItem('ev4_gd_token',JSON.stringify(gdToken));
+        localStorage.setItem('ev4_gd_expiry',String(gdTokenExpiry));
         try{
           const r=await fetch('https://www.googleapis.com/oauth2/v2/userinfo',{headers:{'Authorization':'Bearer '+gdToken}});
           const u=await r.json();
@@ -5691,6 +5694,7 @@ function gdCollectData(){
 // שמירת JSON לדרייב
 async function gdSaveData(retryCount=0){
   if(!gdToken)return;
+  await gdEnsureToken();
   // מנע דריסת ענן עם נתונים ריקים (מצב לאחר התנתקות לפני טעינה מענן)
   if(recs.length===0 && gdDataFileId){gdDirty=false;return;}
   if(gdSyncing){gdDirty=true;return;}
@@ -5871,11 +5875,34 @@ function gdAutoSave(){
 const GD_MAX_BACKUPS=365;
 const GD_BACKUP_PREFIX='ev4_backup_';
 
+async function gdEnsureToken(){
+  // אם הטוקן פג תוקף (או יפוג תוך 5 דקות) — בקש חדש
+  if(gdToken && Date.now() < gdTokenExpiry - 300000) return true;
+  return new Promise(resolve=>{
+    try{
+      const client=google.accounts.oauth2.initTokenClient({
+        client_id:GD_CLIENT_ID,
+        scope:GD_SCOPE+' https://www.googleapis.com/auth/userinfo.profile',
+        prompt:'',
+        callback:async(resp)=>{
+          if(resp.error){resolve(false);return;}
+          gdToken=resp.access_token;
+          gdTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
+          localStorage.setItem('ev4_gd_token',JSON.stringify(gdToken));
+          localStorage.setItem('ev4_gd_expiry',String(gdTokenExpiry));
+          resolve(true);
+        }
+      });
+      client.requestAccessToken();
+    }catch{resolve(false);}
+  });
+}
+
 async function gdSaveBackup(){
-  if(!gdToken||recs.length===0){
-    if(!gdToken)toast('⚠️ יש להתחבר ל-Google Drive תחילה','w');
-    return;
-  }
+  if(!gdToken){toast('⚠️ יש להתחבר ל-Google Drive תחילה','w');return;}
+  if(recs.length===0)return;
+  const _ok=await gdEnsureToken();
+  if(!_ok){toast('⚠️ שגיאת התחברות — נסה להתחבר מחדש','w');return;}
   const ts=Date.now();
   const name=GD_BACKUP_PREFIX+ts+'.json';
   const data={...gdCollectData(),_backupTs:ts,_backupLabel:new Date(ts).toLocaleString('he-IL')};
@@ -6073,6 +6100,8 @@ function gdCheckBackupAge(){
     const savedUid=localStorage.getItem('ev4_gd_uid');
     const token=savedToken?JSON.parse(savedToken):null;
     const uid=savedUid?JSON.parse(savedUid):null;
+    const savedExpiry=localStorage.getItem('ev4_gd_expiry');
+    gdTokenExpiry=savedExpiry?parseInt(savedExpiry):0;
     if(token&&uid){
       gdToken=token;gdUserId=uid;LS._uid=uid;
       gdLoadUserIds();
