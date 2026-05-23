@@ -5872,8 +5872,10 @@ const GD_MAX_BACKUPS=365;
 const GD_BACKUP_PREFIX='ev4_backup_';
 
 async function gdSaveBackup(){
-  // שמור גיבוי עם timestamp בשם הקובץ
-  if(!gdToken||recs.length===0)return;
+  if(!gdToken||recs.length===0){
+    if(!gdToken)toast('⚠️ יש להתחבר ל-Google Drive תחילה','w');
+    return;
+  }
   const ts=Date.now();
   const name=GD_BACKUP_PREFIX+ts+'.json';
   const data={...gdCollectData(),_backupTs:ts,_backupLabel:new Date(ts).toLocaleString('he-IL')};
@@ -5883,12 +5885,19 @@ async function gdSaveBackup(){
   form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
   form.append('file',blob);
   try{
-    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+    const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
       method:'POST',headers:{'Authorization':'Bearer '+gdToken},body:form});
-    // מחק גיבויים ישנים (שמור רק GD_MAX_BACKUPS)
+    if(!r.ok){
+      const err=await r.json().catch(()=>({}));
+      toast(`❌ שגיאת גיבוי: ${err?.error?.message||r.status}`,'e');
+      return;
+    }
     await gdCleanOldBackups();
-    toast('📦 גיבוי נשמר');
-  }catch(e){toast('⚠️ שגיאה בשמירת גיבוי','w');}
+    toast('📦 גיבוי נשמר בהצלחה');
+    LS.set('ev4_lastAutoBackup',ts);
+  }catch(e){
+    toast(`❌ שגיאת גיבוי: ${e.message}`,'e');
+  }
 }
 
 async function gdListBackups(){
