@@ -5973,12 +5973,11 @@ function _diffData(a,b){
   if(Math.abs(aKwh-bKwh)>0.1)diffs.push(`קו"ש: ${bKwh.toFixed(1)}→${aKwh.toFixed(1)}`);
   const aCost=ar.reduce((s,r)=>s+(r.cost||0),0),bCost=br.reduce((s,r)=>s+(r.cost||0),0);
   if(Math.abs(aCost-bCost)>0.1)diffs.push(`עלות: ₪${bCost.toFixed(0)}→₪${aCost.toFixed(0)}`);
-  // אודומטר — תמיד מוצג
-  const aKm=ar.length?Math.max(...ar.map(r=>r.odo||0)):0;
-  const bKm=br.length?Math.max(...br.map(r=>r.odo||0)):0;
-  const odoStr=`אודומטר: ${aKm.toLocaleString()} ק"מ`;
-  const changeStr=diffs.length?diffs.join(' · '):'ללא שינויים';
-  return odoStr+(diffs.length?' · '+changeStr:'');
+  // אודומטר — רק אם יש שינוי
+  const aKm=ar.length?Math.max(...ar.map(r=>r.kmTotal||0)):0;
+  const bKm=br.length?Math.max(...br.map(r=>r.kmTotal||0)):0;
+  if(aKm!==bKm)diffs.push(`אודומטר: ${bKm.toLocaleString()}→${aKm.toLocaleString()} ק"מ`);
+  return diffs.length?diffs.join(' · '):'זהה לגרסה הנוכחית';
 }
 
 async function renderBackupTab(){
