@@ -5694,7 +5694,6 @@ function gdCollectData(){
 // שמירת JSON לדרייב
 async function gdSaveData(retryCount=0){
   if(!gdToken)return;
-  await gdEnsureToken();
   // מנע דריסת ענן עם נתונים ריקים (מצב לאחר התנתקות לפני טעינה מענן)
   if(recs.length===0 && gdDataFileId){gdDirty=false;return;}
   if(gdSyncing){gdDirty=true;return;}
@@ -5904,8 +5903,6 @@ async function gdEnsureToken(){
 async function gdSaveBackup(){
   if(!gdToken){toast('⚠️ יש להתחבר ל-Google Drive תחילה','w');return;}
   if(recs.length===0)return;
-  const _ok=await gdEnsureToken();
-  if(!_ok){toast('⚠️ שגיאת התחברות — נסה להתחבר מחדש','w');return;}
   const ts=Date.now();
   const name=GD_BACKUP_PREFIX+ts+'.json';
   const data={...gdCollectData(),_backupTs:ts,_backupLabel:new Date(ts).toLocaleString('he-IL')};
@@ -5919,6 +5916,7 @@ async function gdSaveBackup(){
       method:'POST',headers:{'Authorization':'Bearer '+gdToken},body:form});
     if(!r.ok){
       const err=await r.json().catch(()=>({}));
+      if(r.status===401)return; // טוקן פג — בשקט, ייעשה בפעם הבאה
       toast(`❌ שגיאת גיבוי: ${err?.error?.message||r.status}`,'e');
       return;
     }
@@ -5999,23 +5997,29 @@ async function renderBackupTab(){
   }
   const current=gdCollectData();
   let html=`
-    <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd)">
-      <span style="font-size:.82rem;color:var(--tx3)">${backups.length} גיבויים שמורים (מקסימום ${GD_MAX_BACKUPS})</span>
-      <button class="gbtn g" onclick="gdSaveBackup().then(()=>renderBackupTab())" style="font-size:.75rem;padding:5px 10px">📦 גבה עכשיו</button>
+    <div style="padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--bd);gap:8px;flex-wrap:wrap">
+      <span style="font-size:.78rem;color:var(--tx3)">${backups.length} גיבויים</span>
+      <div style="display:flex;gap:6px">
+        <button class="gbtn d" id="delSelectedBtn" onclick="gdDeleteSelected()" style="font-size:.72rem;padding:4px 10px;display:none">🗑️ מחק נבחרים</button>
+        <button class="gbtn g" onclick="gdSaveBackup().then(()=>renderBackupTab())" style="font-size:.72rem;padding:4px 10px">📦 גבה עכשיו</button>
+      </div>
     </div>`;
   for(const b of backups){
     const dt=new Date(b.ts||b.modified).toLocaleString('he-IL',{year:'2-digit',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     const kb=b.size?Math.round(b.size/1024)+'KB':'';
     html+=`
-    <div style="border-bottom:1px solid var(--bd);padding:12px 16px">
+    <div style="border-bottom:1px solid var(--bd);padding:10px 16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div>
-          <div style="font-size:.85rem;font-weight:700;color:var(--tx)">${dt}</div>
-          <div style="font-size:.72rem;color:var(--tx3);margin-top:2px" id="bdiff_${b.id}">⏳ בודק...</div>
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <input type="checkbox" class="bk-cb" data-id="${b.id}" onchange="gdUpdateDelBtn()" style="margin-top:3px;width:16px;height:16px;cursor:pointer;accent-color:var(--er)">
+          <div>
+            <div style="font-size:.85rem;font-weight:700;color:var(--tx)">${dt}</div>
+            <div style="font-size:.72rem;color:var(--tx3);margin-top:2px" id="bdiff_${b.id}">⏳ בודק...</div>
+          </div>
         </div>
         <span style="font-size:.68rem;color:var(--tx3)">${kb}</span>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;padding-right:24px">
         <button class="gbtn" onclick="gdRestoreBackup('${b.id}')" style="font-size:.72rem;padding:4px 10px">⏪ שחזר</button>
         <button class="gbtn" onclick="gdExportBackup('${b.id}')" style="font-size:.72rem;padding:4px 10px">⬇️ ייצא</button>
         <button class="gbtn d" onclick="gdDeleteBackupUI('${b.id}')" style="font-size:.72rem;padding:4px 10px">🗑️ מחק</button>
@@ -6023,13 +6027,28 @@ async function renderBackupTab(){
     </div>`;
   }
   el.innerHTML=html;
-  // חשב diff לכל גיבוי ברקע
   for(const b of backups){
     gdLoadBackup(b.id).then(data=>{
       const el2=$('bdiff_'+b.id);
       if(el2&&data)el2.textContent=_diffData(current,data);
     });
   }
+}
+
+function gdUpdateDelBtn(){
+  const checked=document.querySelectorAll('.bk-cb:checked').length;
+  const btn=$('delSelectedBtn');
+  if(btn)btn.style.display=checked>0?'block':'none';
+  if(btn&&checked>0)btn.textContent=`🗑️ מחק ${checked} נבחרים`;
+}
+
+async function gdDeleteSelected(){
+  const checked=[...document.querySelectorAll('.bk-cb:checked')].map(cb=>cb.dataset.id);
+  if(!checked.length)return;
+  if(!await confirmAsync(`מחק ${checked.length} גיבויים נבחרים?`))return;
+  for(const id of checked) await gdDeleteBackup(id);
+  toast(`🗑️ ${checked.length} גיבויים נמחקו`);
+  renderBackupTab();
 }
 
 async function gdRestoreBackup(id){
@@ -6080,17 +6099,18 @@ function gdAutoBackupOnChange(){
 
 function gdCheckBackupAge(){
   const now=Date.now();
+  const lastEntry=LS.get('ev4_lastEntry',0); // זמן כניסה אחרונה
   const lastAutoBackup=LS.get('ev4_lastAutoBackup',0);
   if(!gdToken||recs.length===0)return;
-  // גיבוי אוטומטי יומי — אם עברו 24 שעות מהגיבוי האחרון
-  if(now-lastAutoBackup>86400000){
+  // גיבוי יומי — רק אם לא הייתה כניסה 24 שעות
+  if(now-lastEntry>86400000){
     LS.set('ev4_lastAutoBackup',now);
     setTimeout(()=>{
-      gdSaveBackup().then(()=>{
-        toast('📦 גיבוי יומי נשמר אוטומטית');
-      });
-    },3000); // המתן 3 שניות אחרי הסנכרון
+      gdSaveBackup().then(()=>toast('📦 גיבוי יומי נשמר אוטומטית'));
+    },3000);
   }
+  // עדכן זמן כניסה
+  LS.set('ev4_lastEntry',now);
 }
 
 (function gdInit(){
