@@ -5928,6 +5928,32 @@ async function gdSaveBackup(){
   }
 }
 
+async function gdDiag(){
+  const lines=[];
+  lines.push(`טוקן: ${gdToken?'קיים ('+gdToken.slice(0,10)+'...)':'חסר'}`);
+  // נסה רשימת כל הקבצים
+  try{
+    const r=await fetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name,size)',{headers:{'Authorization':'Bearer '+gdToken}});
+    const j=await r.json();
+    if(j.error) lines.push(`שגיאת רשימה: ${j.error.message}`);
+    else lines.push(`קבצים ב-appDataFolder: ${(j.files||[]).length}`,(j.files||[]).map(f=>f.name).join(', ')||'(ריק)');
+  }catch(e){lines.push(`חריגה: ${e.message}`);}
+  // נסה שמירת גיבוי ובדוק תשובה
+  try{
+    const ts=Date.now();
+    const blob=new Blob([JSON.stringify({test:true,ts})],{type:'application/json'});
+    const meta={name:`ev4_backup_${ts}.json`,parents:['appDataFolder']};
+    const form=new FormData();
+    form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
+    form.append('file',blob);
+    const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{'Authorization':'Bearer '+gdToken},body:form});
+    const j=await r.json();
+    if(j.error) lines.push(`שגיאת שמירה: ${j.error.message}`);
+    else lines.push(`שמירה הצליחה! id: ${j.id}`);
+  }catch(e){lines.push(`חריגת שמירה: ${e.message}`);}
+  alert(lines.join('\n'));
+}
+
 async function gdListBackups(){
   if(!gdToken)return[];
   try{
@@ -5994,7 +6020,7 @@ async function renderBackupTab(){
   el.innerHTML='<div style="text-align:center;padding:20px;color:var(--tx3)">⏳ טוען גיבויים...</div>';
   const backups=await gdListBackups();
   if(!backups.length){
-    el.innerHTML=`<div style="padding:12px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:flex-start"><button class="gbtn g" onclick="gdSaveBackup().then(()=>renderBackupTab())" style="font-size:.75rem;padding:5px 10px">📦 גבה עכשיו</button></div><div style="text-align:center;padding:30px;color:var(--tx3)">אין גיבויים שמורים עדיין</div>`;
+    el.innerHTML=`<div style="padding:12px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:flex-start;gap:8px"><button class="gbtn g" onclick="gdSaveBackup().then(()=>renderBackupTab())" style="font-size:.75rem;padding:5px 10px">📦 גבה עכשיו</button><button class="gbtn" onclick="gdDiag()" style="font-size:.75rem;padding:5px 10px">🔍 דיאג</button></div><div style="text-align:center;padding:30px;color:var(--tx3)">אין גיבויים שמורים עדיין</div>`;
     return;
   }
   const current=gdCollectData();
