@@ -319,6 +319,7 @@ thead th{padding:8px 8px;text-align:right;font-weight:700;color:var(--tx3);font-
 .stat-row:last-child{border-bottom:none;}
 .stat-lbl{font-size:.88rem;color:var(--tx);display:flex;align-items:center;gap:5px;}
 @keyframes dirtypulse{0%,100%{opacity:1}50%{opacity:.3}}
+.bk-cb{appearance:auto;-webkit-appearance:checkbox;width:18px!important;height:18px!important;cursor:pointer;accent-color:#00c896;}
 .tip-btn{background:rgba(42,53,71,.7);border:1px solid var(--bd);border-radius:50%;width:18px;height:18px;font-size:.68rem;color:var(--tx2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
 .tip-btn:hover{background:var(--ac2);color:#fff;border-color:var(--ac2);}
 body.light .tip-btn{background:var(--ac2);color:#fff;border-color:var(--ac2);}
@@ -5631,6 +5632,8 @@ function _doGdLogin(){
         if(resp.error){gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');gdSetStatus('❌ שגיאת התחברות','var(--er)');return;}
         gdToken=resp.access_token;
         gdTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
+        localStorage.setItem('ev4_gd_token',JSON.stringify(gdToken));
+        localStorage.setItem('ev4_gd_expiry',String(gdTokenExpiry));
         try{
           const r=await fetch('https://www.googleapis.com/oauth2/v2/userinfo',{headers:{'Authorization':'Bearer '+gdToken}});
           const u=await r.json();
@@ -6038,7 +6041,7 @@ async function renderBackupTab(){
     <div style="border-bottom:1px solid var(--bd);padding:10px 16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
         <div style="display:flex;align-items:flex-start;gap:8px">
-          <input type="checkbox" class="bk-cb" data-id="${b.id}" onchange="gdUpdateDelBtn()" style="margin-top:3px;width:18px;height:18px;cursor:pointer;accent-color:var(--ac);border-radius:4px;">
+          <input type="checkbox" class="bk-cb" data-id="${b.id}" onchange="gdUpdateDelBtn()" style="margin-top:3px;width:18px;height:18px;cursor:pointer;accent-color:var(--ac);flex-shrink:0">
           <div>
             <div style="font-size:.85rem;font-weight:700;color:var(--tx)">${dt}</div>
             <div style="font-size:.72rem;color:var(--tx3);margin-top:2px" id="bdiff_${b.id}">⏳ בודק...</div>
@@ -6185,36 +6188,18 @@ function gdCheckBackupAge(){
     return;
   }
   const savedToken=localStorage.getItem('ev4_gd_token');
+  const savedExpiry=localStorage.getItem('ev4_gd_expiry');
   const savedUid=localStorage.getItem('ev4_gd_uid');
+  const token=savedToken?JSON.parse(savedToken):null;
   const uid=savedUid?JSON.parse(savedUid):null;
-  if(uid){
-    gdUserId=uid;LS._uid=uid;
+  gdTokenExpiry=savedExpiry?parseInt(savedExpiry):0;
+  if(token&&uid){
+    gdToken=token;gdUserId=uid;LS._uid=uid;
     gdLoadUserIds();
-    gdSetStatus('☁️ מחובר','var(--tx3)');
-    try{
-      const _sc=google.accounts.oauth2.initTokenClient({
-        client_id:GD_CLIENT_ID,
-        scope:GD_SCOPE+' https://www.googleapis.com/auth/userinfo.profile',
-        prompt:'none',
-        login_hint:uid,
-        callback:(resp)=>{
-          if(resp.error||!resp.access_token){
-            gdSetStatus('❌ יש להתחבר מחדש','var(--er)');
-            gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
-            return;
-          }
-          gdToken=resp.access_token;
-          gdTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
-          gdSetStatus('✅ מחובר','var(--ac)');gdSetHdrStatus('✅ מחובר');
-          gdSetBtn('התנתק',gdLogout,'var(--er)');
-          gdSync();
-        }
-      });
-      _sc.requestAccessToken();
-    }catch(e){
-      gdSetStatus('❌ יש להתחבר מחדש','var(--er)');
-      gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
-    }
+    gdSetStatus('✅ מחובר','var(--ac)');
+    gdSetHdrStatus('✅ מחובר');
+    gdSetBtn('התנתק',gdLogout,'var(--er)');
+    gdSync();
   } else {
     // לא מחובר — הצג כפתור התחברות
     gdSetStatus('☁️ לא מחובר','var(--tx2)');
