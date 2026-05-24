@@ -5631,8 +5631,6 @@ function _doGdLogin(){
         if(resp.error){gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');gdSetStatus('❌ שגיאת התחברות','var(--er)');return;}
         gdToken=resp.access_token;
         gdTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
-        localStorage.setItem('ev4_gd_token',JSON.stringify(gdToken));
-        localStorage.setItem('ev4_gd_expiry',String(gdTokenExpiry));
         try{
           const r=await fetch('https://www.googleapis.com/oauth2/v2/userinfo',{headers:{'Authorization':'Bearer '+gdToken}});
           const u=await r.json();
@@ -6147,17 +6145,38 @@ function gdCheckBackupAge(){
   const justCleared=localStorage.getItem('ev4_justCleared');
   if(justCleared){
     localStorage.removeItem('ev4_justCleared');
-    const savedToken=localStorage.getItem('ev4_gd_token');
     const savedUid=localStorage.getItem('ev4_gd_uid');
-    const token=savedToken?JSON.parse(savedToken):null;
     const uid=savedUid?JSON.parse(savedUid):null;
-    if(token&&uid){
-      gdToken=token;gdUserId=uid;LS._uid=uid;
+    if(uid){
+      gdUserId=uid;LS._uid=uid;
       gdLoadUserIds();
-      gdSetStatus('✅ מחובר','var(--ac)');
-      gdSetHdrStatus('✅ מחובר');
-      gdSetBtn('התנתק',gdLogout,'var(--er)');
-      gdSync();
+      gdSetStatus('⏳ מתחבר...','var(--ac3)');
+      gdSetHdrStatus('⏳ מתחבר...');
+      try{
+        const _sc=google.accounts.oauth2.initTokenClient({
+          client_id:GD_CLIENT_ID,
+          scope:GD_SCOPE+' https://www.googleapis.com/auth/userinfo.profile',
+          prompt:'none',
+          login_hint:uid,
+          callback:(resp)=>{
+            if(resp.error||!resp.access_token){
+              gdSetStatus('❌ יש להתחבר מחדש','var(--er)');
+              gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
+              return;
+            }
+            gdToken=resp.access_token;
+            gdTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
+            gdSetStatus('✅ מחובר','var(--ac)');
+            gdSetHdrStatus('✅ מחובר');
+            gdSetBtn('התנתק',gdLogout,'var(--er)');
+            gdSync();
+          }
+        });
+        _sc.requestAccessToken();
+      }catch(e){
+        gdSetStatus('❌ יש להתחבר מחדש','var(--er)');
+        gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');
+      }
     } else {
       gdSetStatus('☁️ לא מחובר','var(--tx2)');
       gdSetHdrStatus('☁️ לא מחובר');
