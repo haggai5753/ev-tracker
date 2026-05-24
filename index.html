@@ -6100,40 +6100,13 @@ function gdCheckBackupAge(){
     const savedUid=localStorage.getItem('ev4_gd_uid');
     const token=savedToken?JSON.parse(savedToken):null;
     const uid=savedUid?JSON.parse(savedUid):null;
-    const savedExpiry=localStorage.getItem('ev4_gd_expiry');
-    gdTokenExpiry=savedExpiry?parseInt(savedExpiry):0;
     if(token&&uid){
-      // אם הטוקן עדיין תקף — השתמש בו ישירות
-      if(gdTokenExpiry>Date.now()){
-        gdToken=token;gdUserId=uid;LS._uid=uid;
-        gdLoadUserIds();
-        gdSetStatus('✅ מחובר','var(--ac)');
-        gdSetHdrStatus('✅ מחובר');
-        gdSetBtn('התנתק',gdLogout,'var(--er)');
-        gdSync();
-      } else {
-        // פג תוקף — בקש חדש בשקט
-        gdUserId=uid;LS._uid=uid;
-        gdLoadUserIds();
-        gdSetStatus('⏳ מתחבר...','var(--ac3)');
-        gdSetHdrStatus('⏳ מתחבר...');
-        try{
-          const _sc=google.accounts.oauth2.initTokenClient({
-            client_id:GD_CLIENT_ID,scope:GD_SCOPE+' https://www.googleapis.com/auth/userinfo.profile',
-            prompt:'',hint:uid,
-            callback:async(resp)=>{
-              if(resp.error){gdSetStatus('❌ יש להתחבר מחדש','var(--er)');gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');return;}
-              gdToken=resp.access_token;
-              gdTokenExpiry=Date.now()+(resp.expires_in||3600)*1000;
-              localStorage.setItem('ev4_gd_token',JSON.stringify(gdToken));
-              localStorage.setItem('ev4_gd_expiry',String(gdTokenExpiry));
-              gdSetBtn('התנתק',gdLogout,'var(--er)');
-              gdSync();
-            }
-          });
-          _sc.requestAccessToken();
-        }catch{gdSetStatus('❌ יש להתחבר מחדש','var(--er)');gdSetBtn('התחבר ל-Google',gdLogin,'var(--ac2)');}
-      }
+      gdToken=token;gdUserId=uid;LS._uid=uid;
+      gdLoadUserIds();
+      gdSetStatus('✅ מחובר','var(--ac)');
+      gdSetHdrStatus('✅ מחובר');
+      gdSetBtn('התנתק',gdLogout,'var(--er)');
+      gdSync();
     } else {
       gdSetStatus('☁️ לא מחובר','var(--tx2)');
       gdSetHdrStatus('☁️ לא מחובר');
