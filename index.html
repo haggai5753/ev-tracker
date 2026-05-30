@@ -1552,12 +1552,13 @@ function saveRec(){
   const note=$('inNote').value.trim();
   if(!ds||isNaN(kl)||isNaN(kt)){toast('⚠️ יש למלא תאריך, ק"מ נשאר ואודומטר','e');return;}
   // אם לא הוזן קו"ש — חשב לפי נוסחה
+  let kwhAuto=false;
   if(isNaN(kw)||kw<=0){
     const chargeKwh=st.chargeKwh||80;
     const range=st.range||485;
-    // ((טווח - ק"מ נשאר) * (chargeKwh / טווח)) / chargeKwh
     kw=(range-kl)*(chargeKwh/range);
     if(kw<=0){toast('⚠️ לא ניתן לחשב קו"ש — בדוק ק"מ נשאר וטווח מוצהר','e');return;}
+    kwhAuto=true;
   }
   if(recs.length>0&&ds<recs[recs.length-1].date){toast('⚠️ התאריך מוקדם מהרשומה האחרונה','e');return;}
   const manR=parseFloat($('inRate').value);
@@ -1573,7 +1574,7 @@ function saveRec(){
   const kmD=recs.length>0?kt-recs[recs.length-1].kmTotal:null;
   const kwhC=(recs.length>0?recs[recs.length-1].kwhCumul:0)+kw+kwa;
   const cost=kw*r1+kwa*r2;
-  recs.push({id:Date.now(),date:ds,kmLeft:kl,kmTotal:kt,kmDriven:kmD,kwh:kw,kwhAdd:kwa,kwhCumul:kwhC,companyId:selCo,addCoId:addCid,rate:r1,rateAdd:r2,cost,note,companyName:cos.find(c=>c.id===selCo)?.name||selCo});
+  recs.push({id:Date.now(),date:ds,kmLeft:kl,kmTotal:kt,kmDriven:kmD,kwh:kw,kwhAuto:kwhAuto||undefined,kwhAdd:kwa,kwhCumul:kwhC,companyId:selCo,addCoId:addCid,rate:r1,rateAdd:r2,cost,note,companyName:cos.find(c=>c.id===selCo)?.name||selCo});
   // אם הוזן תעריף ידני — עדכן אותו כתעריף החברה
   if(!isNaN(manR)&&manR>0){
     const ci=cos.findIndex(c=>c.id===selCo);
@@ -1890,7 +1891,7 @@ function renderTable(hl=false){
       <td class="cd" style="color:var(--tx3);font-size:.65rem">${num}</td>
       <td class="cd">${fd(r.date)}</td>
       <td class="ckm">${r.kmDriven!=null?fmtNum(r.kmDriven,0):'—'}</td>
-      <td class="cq">${fmtNum(kw,1)}</td>
+      <td class="cq">${fmtNum(kw,1)}${r.kwhAuto?'<span title="קו&quot;ש חושב אוטומטית — יש להזין ידנית" style="color:var(--ac3);font-size:.7rem;margin-right:2px;cursor:help">⚠</span>':''}</td>
       <td class="cc">${fmtILS(r.cost,2)}</td>
       <td style="white-space:nowrap"><button class="bdl" style="color:var(--ac2)" onclick="openEdit(${r.id},event)">✎</button><button class="bdl" onclick="delRec(${r.id},event)">✕</button></td>
     </tr>`;
@@ -1995,7 +1996,7 @@ function buildDetail(r){
 
   // שורה 1: נתוני טעינה + נשאר + חברה
   g+='<div class="rd-sect">⚡ טעינה</div><div class="rd-grid">';
-  g+=item('קו"ש שנטענו',fmtNum(kw,2),'g');
+  g+=item('קו"ש שנטענו',fmtNum(kw,2)+(r.kwhAuto?' ⚠ חושב אוטומטית':''),'g');
   g+=item('תעריף',(r.rate||0).toFixed(3)+' ₪','y');
   g+=item('עלות טעינה',fmtILS(r.cost,2),'y');
   g+=item('ק"מ נשאר',fmtNum(r.kmLeft,0),'');
@@ -4495,7 +4496,7 @@ function saveEdit(){
   }
   const rate=parseFloat($('editRate').value)||coRate($('editCo').value,ds);
   if(!ds){toast('⚠️ נא למלא תאריך','e');return;}
-  recs[idx]={...recs[idx],date:ds,kmLeft:kl,kmTotal:kt,kwh:kw,rate,
+  recs[idx]={...recs[idx],date:ds,kmLeft:kl,kmTotal:kt,kwh:kw,kwhAuto:undefined,rate,
     companyId:$('editCo').value,
     companyName:cos.find(c=>c.id===$('editCo').value)?.name||'',
     cost:kw*rate,note:$('editNote').value.trim()};
@@ -6058,7 +6059,7 @@ async function renderBackupTab(){
   el.innerHTML='<div style="text-align:center;padding:20px;color:var(--tx3)">⏳ טוען גיבויים...</div>';
   const backups=await gdListBackups();
   if(!backups.length){
-    el.innerHTML=`<div style="padding:12px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:flex-start;gap:8px"><button class="gbtn g" onclick="gdSaveBackup().then(()=>renderBackupTab())" style="font-size:.75rem;padding:5px 10px">📦 גבה עכשיו</button><button class="gbtn" onclick="gdDiag()" style="font-size:.75rem;padding:5px 10px">🔍 דיאג</button></div><div style="text-align:center;padding:30px;color:var(--tx3)">אין גיבויים שמורים עדיין</div>`;
+    el.innerHTML=`<div style="padding:12px 16px;border-bottom:1px solid var(--bd);display:flex;justify-content:flex-start;gap:8px"><button class="gbtn g" onclick="gdSaveBackup().then(()=>renderBackupTab())" style="font-size:.75rem;padding:5px 10px">📦 גבה עכשיו</button></div><div style="text-align:center;padding:30px;color:var(--tx3)">אין גיבויים שמורים עדיין</div>`;
     return;
   }
   const current=gdCollectData();
@@ -6238,13 +6239,29 @@ function gdCheckBackupAge(){
   const uid=savedUid?JSON.parse(savedUid):null;
   gdTokenExpiry=savedExpiry?parseInt(savedExpiry):0;
   if(token&&uid){
-    gdToken=token;gdUserId=uid;LS._uid=uid;
+    gdUserId=uid;LS._uid=uid;
     gdLoadUserIds();
-    gdSetStatus('✅ מחובר','var(--ac)');
-    gdSetHdrStatus('✅ מחובר');
     gdSetBtn('התנתק',gdLogout,'var(--er)');
-    gdScheduleRefresh();
-    gdSync();
+    // בדוק אם הטוקן עדיין תקף
+    const expiry=gdTokenExpiry||0;
+    const needsRefresh=!token||expiry===0||Date.now()>expiry-300000;
+    if(!needsRefresh){
+      // טוקן תקף — השתמש ישירות
+      gdToken=token;
+      gdSetStatus('✅ מחובר','var(--ac)');
+      gdSetHdrStatus('✅ מחובר');
+      gdScheduleRefresh();
+      gdSync();
+    } else {
+      // טוקן פג/קרוב לפוג — רענן בשקט
+      gdToken=token; // שמור זמנית בזמן הרענון
+      gdSetStatus('✅ מחובר','var(--ac)');
+      gdSetHdrStatus('✅ מחובר');
+      gdRefreshToken().then(ok=>{
+        if(ok){gdScheduleRefresh();}
+        gdSync();
+      });
+    }
   } else {
     // לא מחובר — הצג כפתור התחברות
     gdSetStatus('☁️ לא מחובר','var(--tx2)');
